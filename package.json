@@ -6,6 +6,8 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:api": "turbo dev --filter=api",
+    "dev:web": "turbo dev --filter=web",
     "lint": "turbo lint",
     "format": "turbo format",
     "typecheck": "turbo typecheck"

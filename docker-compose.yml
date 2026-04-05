@@ -4,7 +4,7 @@ services:
     container_name: db
     restart: always
     env_file:
-      - .env
+      - ./apps/api/.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -20,7 +20,7 @@ services:
     container_name: minio
     restart: unless-stopped
     env_file:
-      - .env
+      - ./apps/api/.env
     command: server ${MINIO_DATA_DIR:?MINIO_DATA_DIR is required in .env} --console-address ":${MINIO_CONSOLE_PORT:?MINIO_CONSOLE_PORT is required in .env}"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required in .env}
@@ -38,7 +38,7 @@ services:
     container_name: api
     restart: unless-stopped
     env_file:
-      - .env
+      - ./apps/api/.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -48,6 +48,7 @@ services:
       - "4000:4000"
     depends_on:
       - db
+      - minio
 
   web:
     build:
