@@ -1,0 +1,23 @@
+{
+  "name": "api",
+  "version": "1.0.50",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "bun run --watch src/index.ts"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/openapi": "^1.4.14",
+    "drizzle-orm": "^0.45.2",
+    "drizzle-typebox": "^0.3.3",
+    "elysia": "latest",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "bun-types": "latest",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.21.0"
+  },
+  "module": "src/index.js"
+}
