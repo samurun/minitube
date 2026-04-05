@@ -3,23 +3,29 @@ import openapi from "@elysiajs/openapi"
 import { Elysia } from "elysia"
 import { config } from "./config"
 import { closeDatabase, initDatabase } from "./database"
+import { initStorage } from "./storage"
 import { healthRoute } from "./modules/health"
+import { uploadRoute } from "./modules/upload"
+import { videoRoute } from "./modules/videos"
 
 const app = new Elysia()
-  // Enable CORS for all routes
-  .use(cors())
+  // Enable CORS for configured origins
+  .use(cors({ origin: config.corsOrigins }))
 
   // OpenAPI documentation
   .use(openapi())
 
   // Import routes
   .use(healthRoute)
+  .use(uploadRoute)
+  .use(videoRoute)
 
 // Initialize services
 async function start() {
   try {
     console.log("🚀 Initializing services...")
     await initDatabase()
+    await initStorage()
 
     app.listen({
       port: config.port,
