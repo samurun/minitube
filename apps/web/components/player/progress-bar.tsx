@@ -43,8 +43,8 @@ export function ProgressBar({
     const row = Math.floor(frameIndex / columnsPerRow)
     return {
       backgroundImage: `url(${seekingPreviewUrl})`,
+      backgroundSize: `${columnsPerRow * containerW}px ${totalRows * containerH}px`,
       backgroundPosition: `-${col * containerW}px -${row * containerH}px`,
-      backgroundSize: "contain",
     }
   }
 
