@@ -4,7 +4,7 @@ services:
     container_name: db
     restart: always
     env_file:
-      - ./apps/api/.env
+      - ./.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -20,7 +20,7 @@ services:
     container_name: minio
     restart: unless-stopped
     env_file:
-      - ./apps/api/.env
+      - ./.env
     command: server ${MINIO_DATA_DIR:?MINIO_DATA_DIR is required in .env} --console-address ":${MINIO_CONSOLE_PORT:?MINIO_CONSOLE_PORT is required in .env}"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required in .env}
@@ -38,7 +38,7 @@ services:
     container_name: api
     restart: unless-stopped
     env_file:
-      - ./apps/api/.env
+      - ./.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -49,6 +49,22 @@ services:
     depends_on:
       - db
       - minio
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    ports:
+      - "${RABBITMQ_PORT}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
 
   web:
     build:
@@ -56,11 +72,27 @@ services:
       dockerfile: docker/web.Dockerfile
     container_name: web
     restart: unless-stopped
+    environment:
+      API_URL: http://api:4000
     ports:
       - "3000:3000"
     depends_on:
       - api
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    container_name: worker
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    depends_on:
+      - db
+      - minio
+      - rabbitmq
+
 volumes:
   postgres_data:
   minio_data:
+  rabbitmq_data:
