@@ -3,17 +3,20 @@
 import { formatTime } from "@/lib/format-time"
 import { Slider } from "@workspace/ui/components/slider"
 import { useState } from "react"
+import type { PreviewConfig } from "./index"
 
 export function ProgressBar({
   duration,
   currentTime,
   seekingPreviewUrl,
+  previewConfig,
   onSeek,
   onSeekCommit,
 }: {
   duration: number
   currentTime: number
   seekingPreviewUrl: string
+  previewConfig: PreviewConfig
   onSeek: (values: number[]) => void
   onSeekCommit: () => void
 }) {
@@ -21,6 +24,29 @@ export function ProgressBar({
     percent: number
     time: number
   } | null>(null)
+
+  // Sprite sheet calculation
+  const containerW = 144 // w-36
+  const containerH = 80 // h-20
+  const { frameIntervalSeconds, columnsPerRow } = previewConfig
+  const totalFrames =
+    duration > 0 ? Math.floor(duration / frameIntervalSeconds) : 0
+  const totalRows = Math.ceil(totalFrames / columnsPerRow) || 1
+
+  function getSpriteStyle(percent: number) {
+    if (!totalFrames) return {}
+    const frameIndex = Math.min(
+      Math.floor((percent / 100) * totalFrames),
+      totalFrames - 1
+    )
+    const col = frameIndex % columnsPerRow
+    const row = Math.floor(frameIndex / columnsPerRow)
+    return {
+      backgroundImage: `url(${seekingPreviewUrl})`,
+      backgroundPosition: `-${col * containerW}px -${row * containerH}px`,
+      backgroundSize: "contain",
+    }
+  }
 
   return (
     <div
@@ -46,12 +72,8 @@ export function ProgressBar({
           {seekingPreviewUrl && /^https?:\/\//.test(seekingPreviewUrl) && (
             <div
               aria-hidden="true"
-              className="h-20 w-36 rounded-md border border-white/10 bg-black shadow-xl"
-              style={{
-                backgroundImage: `url(${encodeURI(seekingPreviewUrl)})`,
-                backgroundPosition: `${hoverPreview.percent}% center`,
-                backgroundSize: "cover",
-              }}
+              className="h-20 w-36 rounded-md border border-white/10 shadow-xl outline-1 outline-white"
+              style={getSpriteStyle(hoverPreview.percent)}
             />
           )}
           <div className="rounded bg-black/85 px-2 py-1 text-[11px] font-medium text-white">
