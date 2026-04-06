@@ -38,7 +38,7 @@ export function Player({
   } = useVideoPlayer()
 
   const [showControls, setShowControls] = useState(true)
-  const hideTimer = useRef<ReturnType<typeof setTimeout>>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true)
