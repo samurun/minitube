@@ -104,10 +104,16 @@ export function useVideoPlayer() {
       getFullscreenElement() === wrapperRef.current ||
       isVideoFullscreen(videoRef.current)
 
-    if (isCurrentlyFullscreen) {
-      await exitFullscreen(videoRef.current)
-    } else {
-      await requestFullscreen(wrapperRef.current, videoRef.current)
+    try {
+      if (isCurrentlyFullscreen) {
+        await exitFullscreen(videoRef.current)
+      } else {
+        await requestFullscreen(wrapperRef.current, videoRef.current)
+      }
+    } catch {
+      // Fullscreen requests can fail (for example, unsupported API or
+      // browser/user-gesture restrictions). Ignore the failure and let
+      // fullscreen state continue to be driven by fullscreenchange events.
     }
   }, [])
 
