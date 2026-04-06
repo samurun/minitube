@@ -2,46 +2,15 @@
 
 import { useVideo } from "@/services/video/use-video"
 
-import Link from "next/link"
-import {
-  AlertCircle,
-  Video as VideoIcon,
-  RefreshCw,
-  EllipsisVerticalIcon,
-} from "lucide-react"
+import { AlertCircle, Video as VideoIcon, RefreshCw } from "lucide-react"
+import { Button } from "@workspace/ui/components/button"
+import { VideoCard } from "./video-card"
+import { VideoCardSkeleton } from "./video-card-skeleton"
 
 import type { Video } from "@/services/video/types"
-import { useDeleteVideo } from "@/services/video/use-delete-video"
-
-import { Card, CardContent } from "@workspace/ui/components/card"
-import { Skeleton } from "@workspace/ui/components/skeleton"
-import { Button } from "@workspace/ui/components/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
-import { Badge } from "@workspace/ui/components/badge"
-import { cn } from "@workspace/ui/lib/utils"
-import { useQueryClient } from "@tanstack/react-query"
-
-function VideoCardSkeleton() {
-  return (
-    <Card className="gap-0 overflow-hidden pt-0">
-      <Skeleton className="aspect-video w-full" />
-      <div className="space-y-2 p-3">
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-3 w-1/2" />
-      </div>
-    </Card>
-  )
-}
 
 export function VideoList() {
-  const queryClient = useQueryClient()
   const { data, isLoading, error, refetch } = useVideo()
-  const deleteVideoMutation = useDeleteVideo()
 
   if (isLoading) {
     return (
@@ -92,63 +61,7 @@ export function VideoList() {
       <h2 className="mb-4 text-lg font-semibold">Videos</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {data.videos.map((video: Video) => (
-          <Card
-            key={video.id}
-            className="group relative gap-0 overflow-hidden pt-0 transition-shadow hover:shadow-md"
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                asChild
-              >
-                <Button variant="secondary" size="icon-sm" aria-label={`Actions for ${video.title}`}>
-                  <EllipsisVerticalIcon />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="min-w-9">
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => {
-                    deleteVideoMutation.mutate(String(video.id), {
-                      onSuccess: () => {
-                        queryClient.invalidateQueries({
-                          queryKey: ["videos"],
-                        })
-                      },
-                    })
-                  }}
-                >
-                  ลบ
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Link href={`/videos/${video.id}`} className="block">
-              <div className="aspect-video h-42 w-full bg-muted">
-                <img
-                  src={
-                    video.thumbnailUrl ? video.thumbnailUrl : "/placeholder.svg"
-                  }
-                  alt={video.title}
-                  className={cn(
-                    "h-full w-full",
-                    video.thumbnailUrl ? "object-contain" : "object-cover"
-                  )}
-                />
-              </div>
-              <CardContent className="space-y-1.5 p-3">
-                <h3 className="line-clamp-2 text-sm font-medium">
-                  {video.title}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{video.status}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(video.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </CardContent>
-            </Link>
-          </Card>
+          <VideoCard key={video.id} video={video} />
         ))}
       </div>
     </div>
