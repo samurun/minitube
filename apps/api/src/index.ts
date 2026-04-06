@@ -4,6 +4,7 @@ import { Elysia } from "elysia"
 import { config } from "./config"
 import { closeDatabase, initDatabase } from "./database"
 import { initStorage } from "./storage"
+import { connectRabbitMQ, closeRabbitMQ } from "@workspace/shared/rabbitmq"
 import { healthRoute } from "./modules/health"
 import { uploadRoute } from "./modules/upload"
 import { videoRoute } from "./modules/videos"
@@ -26,6 +27,7 @@ async function start() {
     console.log("🚀 Initializing services...")
     await initDatabase()
     await initStorage()
+    await connectRabbitMQ()
 
     app.listen({
       port: config.port,
@@ -42,8 +44,9 @@ async function start() {
 process.on("SIGINT", async () => {
   console.log("\n🛑 Shutting down gracefully...")
   try {
+    await closeRabbitMQ()
     await closeDatabase()
-    console.log("✓ Database connection closed")
+    console.log("✓ Connections closed")
   } catch (error) {
     console.error("Error during shutdown:", error)
   }
@@ -53,8 +56,9 @@ process.on("SIGINT", async () => {
 process.on("SIGTERM", async () => {
   console.log("\n🛑 Shutting down gracefully...")
   try {
+    await closeRabbitMQ()
     await closeDatabase()
-    console.log("✓ Database connection closed")
+    console.log("✓ Connections closed")
   } catch (error) {
     console.error("Error during shutdown:", error)
   }

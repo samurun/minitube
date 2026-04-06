@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm"
 import { db } from "../../database"
 import { videos } from "../../database/schema"
 import { deleteFromStorage, uploadToRawBucket } from "../../storage"
+import { config } from "../../config"
+import { publishJob, QUEUE } from "@workspace/shared/rabbitmq"
 
 // Magic bytes for supported video formats
 const VIDEO_SIGNATURES: { bytes: number[]; offset: number }[] = [
@@ -25,7 +26,9 @@ export const uploadService = {
     const fileBuffer = await createFileBuffer(file)
 
     if (!isValidVideoFile(fileBuffer)) {
-      throw new Error("Invalid video file: content does not match a supported video format")
+      throw new Error(
+        "Invalid video file: content does not match a supported video format"
+      )
     }
     const rawPath = await uploadToRawBucket(objectName, fileBuffer)
 
@@ -44,25 +47,20 @@ export const uploadService = {
       throw err
     }
 
-    try {
-      // TODO: Queue video processing job here (e.g. using BullMQ or RabbitMQ)
+    publishJob(QUEUE.THUMBNAIL, {
+      videoId: video.id,
+      rawPath: video.rawPath,
+      attempt: 0,
+    })
 
-      return { message: "Video uploaded successfully", video }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to queue video job"
+    publishJob(QUEUE.SEEKING_PREVIEW, {
+      videoId: video.id,
+      rawPath: video.rawPath,
+      ...config.preview,
+      attempt: 0,
+    })
 
-      await db
-        .update(videos)
-        .set({
-          status: "failed",
-          thumbnailErrorMessage: message,
-          seekingPreviewErrorMessage: message,
-          updatedAt: new Date(),
-        })
-        .where(eq(videos.id, video.id))
-      throw err
-    }
+    return { message: "Video uploaded successfully", video }
   },
 }
 
