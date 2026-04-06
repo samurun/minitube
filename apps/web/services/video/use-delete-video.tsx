@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query"
 
 export function useDeleteVideo() {
-  const URL = process.env.NEXT_PUBLIC_API_URL || ""
+   const URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"
   return useMutation({
     mutationFn: async (videoId: string) => {
       const response = await fetch(`${URL}/videos/${videoId}`, {

@@ -32,6 +32,8 @@ async function start() {
     app.listen({
       port: config.port,
       hostname: "0.0.0.0",
+      // Allow up to 500 MB uploads (default Bun limit is 128 MB → causes 413)
+      maxRequestBodySize: 500 * 1024 * 1024,
     })
     console.log(`🦊 Elysia is running at http://localhost:${config.port}`)
   } catch (error) {
