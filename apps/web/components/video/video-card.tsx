@@ -1,4 +1,4 @@
-import { Video } from "@/services/video/types"
+import type { Video } from "@/services/video/types"
 import { useDeleteVideo } from "@/services/video/use-delete-video"
 import { useQueryClient } from "@tanstack/react-query"
 import { Badge } from "@workspace/ui/components/badge"
