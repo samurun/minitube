@@ -49,7 +49,7 @@ export default async function Page({ searchParams }: PageProps) {
             <h1 className="text-lg font-bold">{res.video.title}</h1>
           </div>
         </div>
-        <div className="min-full col-span-1 flex min-w-96 items-start">
+        <div className="min-w-full col-span-1 flex min-w-96 items-start">
           <ul className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-1">
             {new Array(5).fill(0).map((_, i) => (
               <li
