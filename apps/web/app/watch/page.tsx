@@ -1,23 +1,42 @@
 import { Player } from "@/components/player"
 
-export const metadata = {
-  title: "Watch Video",
-}
-
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
 async function fetchVideo(videoId: string) {
   const baseUrl =
-    process.env.NEXT_PUBLIC_API_URL ??
     process.env.API_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
     "http://localhost:4000"
+
   const res = await fetch(`${baseUrl}/videos/${videoId}`)
   if (!res.ok) {
     throw new Error(`Failed to fetch video with id ${videoId}`)
   }
   return res.json()
+}
+
+export const generateMetadata = async ({ searchParams }: PageProps) => {
+  const { v: videoId } = await searchParams
+
+  if (!videoId || Array.isArray(videoId)) {
+    return {
+      title: "Video Not Found",
+    }
+  }
+
+  try {
+    const res = await fetchVideo(videoId)
+    return {
+      title: res.video.title,
+      description: res.video.description || "Watch this video on our platform.",
+    }
+  } catch (error) {
+    return {
+      title: "Failed to Load Video",
+    }
+  }
 }
 
 export default async function Page({ searchParams }: PageProps) {
@@ -44,12 +63,13 @@ export default async function Page({ searchParams }: PageProps) {
             videoUrl={res.video.videoUrl}
             thumbnailUrl={res.video.thumbnailUrl ?? null}
             seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
+            previewConfig={res.preview}
           />
           <div>
             <h1 className="text-lg font-bold">{res.video.title}</h1>
           </div>
         </div>
-        <div className="min-w-full col-span-1 flex min-w-96 items-start">
+        <div className="col-span-1 flex min-w-96 items-start">
           <ul className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-1">
             {new Array(5).fill(0).map((_, i) => (
               <li

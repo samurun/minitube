@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/shared",
+  "version": "1.0.0",
+  "exports": {
+    "./config": "./src/config/index.ts",
+    "./database": "./src/database/index.ts",
+    "./database/schema": "./src/database/schema.ts",
+    "./storage": "./src/storage/index.ts",
+    "./rabbitmq": "./src/rabbitmq/index.ts"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.7",
+    "drizzle-orm": "^0.45.2",
+    "minio": "^8.0.7",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.6",
+    "@types/pg": "^8.20.0",
+    "bun-types": "latest"
+  }
+}

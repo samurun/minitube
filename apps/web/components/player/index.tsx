@@ -7,16 +7,25 @@ import { ProgressBar } from "./progress-bar"
 import { ControlBar } from "./control-bar"
 import { cn } from "@workspace/ui/lib/utils"
 
+export interface PreviewConfig {
+  frameIntervalSeconds: number
+  columnsPerRow: number
+  tileWidth: number
+  tileHeight: number
+}
+
 interface PlayerProps {
   videoUrl: string
   thumbnailUrl: string | null
   seekingPreviewUrl: string
+  previewConfig: PreviewConfig
 }
 
 export function Player({
   videoUrl,
   thumbnailUrl,
   seekingPreviewUrl,
+  previewConfig,
 }: PlayerProps) {
   const {
     wrapperRef,
@@ -105,6 +114,7 @@ export function Player({
             duration={duration}
             currentTime={currentTime}
             seekingPreviewUrl={seekingPreviewUrl}
+            previewConfig={previewConfig}
             onSeek={seek}
             onSeekCommit={seekCommit}
           />
