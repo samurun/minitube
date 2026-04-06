@@ -41,9 +41,9 @@ export default async function Page({ searchParams }: PageProps) {
       <div className="flex flex-col gap-4 px-4 py-6 lg:flex-row">
         <div className="col-span-3 flex w-full flex-col gap-2">
           <Player
-            videoUrl={String(res.video.videoUrl)}
-            thumbnailUrl={String(res.video.thumbnailUrl)}
-            seekingPreviewUrl={String(res.video.seekingPreviewUrl)}
+            videoUrl={res.video.videoUrl}
+            thumbnailUrl={res.video.thumbnailUrl ?? null}
+            seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
           />
           <div>
             <h1 className="text-lg font-bold">{res.video.title}</h1>
