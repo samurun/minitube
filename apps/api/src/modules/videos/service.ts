@@ -17,6 +17,11 @@ interface VideoResponse {
   videoUrl: string | null
   thumbnailUrl: string | null
   seekingPreviewUrl: string | null
+  seekingPreviewInterval: number | null
+  seekingPreviewColumns: number | null
+  seekingPreviewTotalFrames: number | null
+  seekingPreviewTileWidth: number | null
+  seekingPreviewTileHeight: number | null
 }
 
 async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
@@ -40,6 +45,11 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       videoUrl,
       thumbnailUrl,
       seekingPreviewUrl,
+      seekingPreviewInterval: video.seekingPreviewInterval,
+      seekingPreviewColumns: video.seekingPreviewColumns,
+      seekingPreviewTotalFrames: video.seekingPreviewTotalFrames,
+      seekingPreviewTileWidth: video.seekingPreviewTileWidth,
+      seekingPreviewTileHeight: video.seekingPreviewTileHeight,
     }
   } catch (err) {
     console.error(`Failed to generate presigned URLs for video ${video.id}:`, err)
@@ -52,6 +62,11 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       videoUrl: null,
       thumbnailUrl: null,
       seekingPreviewUrl: null,
+      seekingPreviewInterval: video.seekingPreviewInterval,
+      seekingPreviewColumns: video.seekingPreviewColumns,
+      seekingPreviewTotalFrames: video.seekingPreviewTotalFrames,
+      seekingPreviewTileWidth: video.seekingPreviewTileWidth,
+      seekingPreviewTileHeight: video.seekingPreviewTileHeight,
     }
   }
 }

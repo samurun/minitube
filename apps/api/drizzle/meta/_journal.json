@@ -15,6 +15,27 @@
       "when": 1775376295307,
       "tag": "0001_watery_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775582106918,
+      "tag": "0002_glorious_rattler",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775616580236,
+      "tag": "0003_married_mojo",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775620447543,
+      "tag": "0004_puzzling_jane_foster",
+      "breakpoints": true
     }
   ]
 }

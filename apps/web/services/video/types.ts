@@ -7,6 +7,11 @@ export interface Video {
   videoUrl: string | null
   thumbnailUrl: string | null
   seekingPreviewUrl: string | null
+  seekingPreviewInterval: number | null
+  seekingPreviewColumns: number | null
+  seekingPreviewTotalFrames: number | null
+  seekingPreviewTileWidth: number | null
+  seekingPreviewTileHeight: number | null
 }
 
 export interface VideosResponse {

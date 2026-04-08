@@ -1,7 +1,6 @@
 import type { Video } from "@/services/video/types"
 import { useDeleteVideo } from "@/services/video/use-delete-video"
 import { useQueryClient } from "@tanstack/react-query"
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import {
@@ -11,7 +10,12 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
-import { EllipsisVerticalIcon, Loader2 } from "lucide-react"
+import {
+  CircleCheckIcon,
+  EllipsisVerticalIcon,
+  Loader2,
+  Loader2Icon,
+} from "lucide-react"
 import Link from "next/link"
 
 interface VideoCardProps {
@@ -24,11 +28,6 @@ export function VideoCard({ video }: VideoCardProps) {
   const isUploading = video.status === "uploading"
   const isPending = video.status === "pending"
   const isProcessing = isUploading || isPending
-  const statusLabel = isUploading
-    ? "Uploading"
-    : isPending
-      ? "Processing"
-      : video.status
 
   const body = (
     <>
@@ -37,7 +36,7 @@ export function VideoCard({ video }: VideoCardProps) {
           <img
             src={video.thumbnailUrl}
             alt={video.title}
-            className="object-contain h-full w-full"
+            className="h-full w-full object-contain"
           />
         ) : (
           <div
@@ -48,7 +47,7 @@ export function VideoCard({ video }: VideoCardProps) {
             )}
           />
         )}
-        {isProcessing && (
+        {!video.thumbnailUrl && isProcessing && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-background/40 backdrop-blur-[1px]">
             <Loader2 className="size-6 animate-spin text-primary" />
             <span className="text-xs font-medium text-foreground">
@@ -59,14 +58,26 @@ export function VideoCard({ video }: VideoCardProps) {
       </div>
       <CardContent className="space-y-1.5 p-3">
         <h3 className="line-clamp-2 text-sm font-medium">{video.title}</h3>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className={cn(isProcessing && "gap-1")}>
-            {isProcessing && <Loader2 className="size-3 animate-spin" />}
-            {statusLabel}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
+        <div className="flex flex-col gap-2 text-xs">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span>Thumbnail</span>
+            {video.thumbnailUrl ? (
+              <CircleCheckIcon className="size-4 text-green-500" />
+            ) : (
+              <Loader2Icon className="size-4 animate-spin" />
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span>Seeking Preview </span>
+            {video.seekingPreviewUrl ? (
+              <CircleCheckIcon className="size-4 text-green-500" />
+            ) : (
+              <Loader2Icon className="size-4 animate-spin" />
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground">
             {new Date(video.createdAt).toLocaleDateString()}
-          </span>
+          </div>
         </div>
       </CardContent>
     </>

@@ -1,0 +1,9 @@
+# Place dashboard JSON files here. Suggested community dashboards:
+# - cAdvisor: https://grafana.com/grafana/dashboards/14282
+# - Node Exporter Full: https://grafana.com/grafana/dashboards/1860
+# - Postgres Exporter: https://grafana.com/grafana/dashboards/9628
+# - RabbitMQ Overview: https://grafana.com/grafana/dashboards/10991
+# - MinIO Cluster: https://grafana.com/grafana/dashboards/13502
+#
+# Download JSON from each link and drop into this folder.
+# Grafana provisioning will pick them up on startup.

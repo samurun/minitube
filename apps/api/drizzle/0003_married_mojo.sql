@@ -1,0 +1,1 @@
+ALTER TABLE "videos" ADD COLUMN "seeking_preview_total_frames" integer;
