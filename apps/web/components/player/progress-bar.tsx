@@ -25,12 +25,23 @@ export function ProgressBar({
     time: number
   } | null>(null)
 
-  // Sprite sheet calculation
-  const containerW = 144 // w-36
-  const containerH = 80 // h-20
+  // Sprite sheet calculation. Display container preserves source aspect ratio
+  // (worker stores actual tile dims after scaling source video). Box is fit
+  // inside MAX_W × MAX_H so portrait videos don't overflow vertically and
+  // landscape videos don't get cut on the sides.
+  // Fixed height — width scales with source aspect ratio.
+  const FIXED_H = 128
+  const tileW = previewConfig.tileWidthActual ?? previewConfig.tileWidth
+  const tileH = previewConfig.tileHeightActual ?? previewConfig.tileHeight
+  const containerH = FIXED_H
+  const containerW = Math.round((FIXED_H * tileW) / tileH)
   const { frameIntervalSeconds, columnsPerRow } = previewConfig
+  // Prefer the exact frame count produced by the worker (stored in DB) so the
+  // tile index always matches the sprite sheet, even if the browser's reported
+  // duration drifts slightly from ffprobe's.
   const totalFrames =
-    duration > 0 ? Math.floor(duration / frameIntervalSeconds) : 0
+    previewConfig.totalFrames ??
+    (duration > 0 ? Math.floor(duration / frameIntervalSeconds) : 0)
   const totalRows = Math.ceil(totalFrames / columnsPerRow) || 1
 
   function getSpriteStyle(percent: number) {
@@ -66,14 +77,18 @@ export function ProgressBar({
         <div
           className="pointer-events-none absolute bottom-full z-20 mb-3 flex -translate-x-1/2 flex-col items-center gap-1"
           style={{
-            left: `clamp(4rem, ${hoverPreview.percent}%, calc(100% - 4rem))`,
+            left: `clamp(${containerW / 2}px, ${hoverPreview.percent}%, calc(100% - ${containerW / 2}px))`,
           }}
         >
           {seekingPreviewUrl && /^https?:\/\//.test(seekingPreviewUrl) && (
             <div
               aria-hidden="true"
-              className="h-20 w-36 rounded-md border border-white/10 shadow-xl outline-1 outline-white"
-              style={getSpriteStyle(hoverPreview.percent)}
+              className="rounded-md border border-white/10 shadow-xl outline-1 outline-white"
+              style={{
+                width: containerW,
+                height: containerH,
+                ...getSpriteStyle(hoverPreview.percent),
+              }}
             />
           )}
           <div className="rounded bg-black/85 px-2 py-1 text-[11px] font-medium text-white">
@@ -81,7 +96,6 @@ export function ProgressBar({
           </div>
         </div>
       )}
-
       <Slider
         aria-label="Video progress"
         min={0}

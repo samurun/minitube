@@ -1,4 +1,4 @@
-import amqplib, { type Connection, type Channel } from "amqplib"
+import amqplib, { type ChannelModel, type Channel } from "amqplib"
 import { config } from "../config"
 
 export const QUEUE = {
@@ -22,7 +22,7 @@ export interface SeekingPreviewJob {
   attempt: number
 }
 
-let connection: Connection | null = null
+let connection: ChannelModel | null = null
 let channel: Channel | null = null
 
 export async function connectRabbitMQ(): Promise<Channel> {
@@ -30,7 +30,7 @@ export async function connectRabbitMQ(): Promise<Channel> {
   connection = await amqplib.connect(url)
   channel = await connection.createChannel()
 
-  connection.on("error", (err) =>
+  connection.on("error", (err: Error) =>
     console.error("RabbitMQ connection error:", err)
   )
   connection.on("close", () => console.warn("RabbitMQ connection closed"))
@@ -55,7 +55,10 @@ export async function closeRabbitMQ(): Promise<void> {
   connection = null
 }
 
-export function publishJob(queue: string, job: ThumbnailJob | SeekingPreviewJob) {
+export function publishJob(
+  queue: string,
+  job: ThumbnailJob | SeekingPreviewJob
+) {
   const ch = getChannel()
   ch.sendToQueue(queue, Buffer.from(JSON.stringify(job)), { persistent: true })
 }

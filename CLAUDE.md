@@ -41,7 +41,7 @@ pnpm typecheck    # tsc --noEmit
 ### Docker
 
 ```bash
-docker compose up -d             # Start all services (db, minio, rabbitmq, api, worker, web)
+docker compose up -d             # Start all services (db, minio, api, worker, web, prometheus, grafana, exporters)
 docker compose down              # Stop all services
 ```
 
@@ -57,23 +57,23 @@ pnpm dlx shadcn@latest add <component> -c apps/web
                         ┌─────────────────────────────────────────────────────────┐
                         │                      Docker Compose                     │
                         │                                                         │
-  ┌──────┐   :3000      │  ┌─────────────┐   :4000    ┌──────────────────────┐    │
-  │ User │─────────────►│  │   Next.js    │──────────►│     Elysia API       │    │
-  │      │◄─────────────│  │   (Web)      │◄──────────│     (Bun)            │    │
-  └──────┘              │  └─────────────┘            └──────────┬───────────┘    │
-                        │                                        │                │
-                        │                          ┌─────────────┼──────────┐     │
-                        │                          │             │          │     │
-                        │                          ▼             ▼          ▼     │
+  ┌──────┐   :3000      │  ┌─────────────┐   :4000   ┌──────────────────────┐     │
+  │ User │─────────────►│  │   Next.js   │──────────►│     Elysia API       │     │ 
+  │      │◄─────────────│  │   (Web)     │◄──────────│     (Bun)            │     │
+  └──────┘              │  └─────────────┘           └──────────┬───────────┘     │
+                        │                                       │                 │
+                        │                         ┌─────────────┼──────────┐      │
+                        │                         │             │          │      │
+                        │                         ▼             ▼          ▼      │
                         │                    ┌──────────┐  ┌─────────┐ ┌───────┐  │
-                        │                    │PostgreSQL│  │  MinIO   │ │Rabbit │  │
-                        │                    │    16    │  │  (S3)    │ │  MQ   │  │
+                        │                    │PostgreSQL│  │  MinIO  │ │Rabbit │  │
+                        │                    │    16    │  │  (S3)   │ │  MQ   │  │
                         │                    └──────────┘  └─────────┘ └───┬───┘  │
-                        │                          ▲          ▲            │      │
-                        │                          │          │            ▼      │
-                        │                          │          │      ┌──────────┐ │
-                        │                          └──────────┼──────│  Worker  │ │
-                        │                                     └──────│  (Bun)   │ │
+                        │                          ▲           ▲           │      │
+                        │                          │           │           ▼      │
+                        │                          │           │     ┌──────────┐ │
+                        │                          └───────────┼─────│  Worker  │ │
+                        │                                      └─────│  (Bun)   │ │
                         │                                            └──────────┘ │
                         └─────────────────────────────────────────────────────────┘
 
@@ -149,7 +149,19 @@ MinIO with two buckets: `raw` (uploaded videos) and `processed` (thumbnails, see
 
 ### Database
 
-Single `videos` table (Drizzle ORM + node-postgres). Schema at `packages/shared/src/database/schema.ts`. Videos track `rawPath`, `thumbnailPath`, `seekingPreviewPath`, processing `status` (pending/completed/failed), and error messages.
+Single `videos` table (Drizzle ORM + node-postgres). Schema at `packages/shared/src/database/schema.ts`. Videos track `rawPath`, `thumbnailPath`, `seekingPreviewPath`, processing `status` (pending/completed/failed), and error messages. Sprite sheet metadata (`seekingPreviewInterval`, `seekingPreviewColumns`, `seekingPreviewTotalFrames`, `seekingPreviewTileWidth`, `seekingPreviewTileHeight`) is persisted so the player can compute tile offsets without re-probing the sprite.
+
+### Monitoring
+
+The Compose stack includes a Prometheus + Grafana observability bundle:
+
+- **Prometheus** (`:9090`) — scrapes metrics, config at `monitoring/prometheus/prometheus.yml`
+- **Grafana** (`:3001`) — dashboards/datasources provisioned from `monitoring/grafana/provisioning/`, dashboard JSON dropped into `monitoring/grafana/dashboards/`. Admin creds via `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`
+- **node-exporter** (`:9100`) — host metrics
+- **postgres-exporter** (`:9187`) — Postgres metrics
+- **MinIO** exposes Prometheus metrics directly (`MINIO_PROMETHEUS_AUTH_TYPE=public`)
+
+> RabbitMQ is currently commented out in `docker-compose.yml`. Run it locally (or uncomment the service, which also enables the `rabbitmq_prometheus` plugin on port `15692`) before starting the API/worker, since both still publish/consume jobs through it.
 
 ## Code Style
 

@@ -121,6 +121,9 @@ importers:
       '@workspace/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(bun-types@1.3.11)(pg@8.20.0)
     devDependencies:
       bun-types:
         specifier: latest

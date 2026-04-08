@@ -12,6 +12,9 @@ export interface PreviewConfig {
   columnsPerRow: number
   tileWidth: number
   tileHeight: number
+  totalFrames?: number | null
+  tileWidthActual?: number | null
+  tileHeightActual?: number | null
 }
 
 interface PlayerProps {

@@ -21,6 +21,11 @@ async function updateVideoField(
     thumbnailErrorMessage: string | null
     seekingPreviewPath: string | null
     seekingPreviewErrorMessage: string | null
+    seekingPreviewInterval: number | null
+    seekingPreviewColumns: number | null
+    seekingPreviewTotalFrames: number | null
+    seekingPreviewTileWidth: number | null
+    seekingPreviewTileHeight: number | null
   }>
 ) {
   await db
@@ -107,10 +112,15 @@ async function start() {
     console.log(`[seeking-preview] video:${job.videoId} attempt:${job.attempt}`)
 
     try {
-      const outputPath = await handleSeekingPreview(job)
+      const result = await handleSeekingPreview(job)
       await updateVideoField(job.videoId, {
-        seekingPreviewPath: outputPath,
+        seekingPreviewPath: result.path,
         seekingPreviewErrorMessage: null,
+        seekingPreviewInterval: result.interval,
+        seekingPreviewColumns: result.columns,
+        seekingPreviewTotalFrames: result.totalFrames,
+        seekingPreviewTileWidth: result.tileWidth,
+        seekingPreviewTileHeight: result.tileHeight,
       })
       console.log(`[seeking-preview] video:${job.videoId} done`)
       ch.ack(msg)

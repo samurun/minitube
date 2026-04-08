@@ -18,7 +18,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
-const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500 MB
+const MAX_FILE_SIZE = 1024 * 1024 * 1024 // 1 GB
 const ACCEPTED_TYPES = [
   "video/mp4",
   "video/webm",
@@ -66,6 +66,11 @@ export function UploadVideo() {
       videoUrl: null,
       thumbnailUrl: null,
       seekingPreviewUrl: null,
+      seekingPreviewInterval: null,
+      seekingPreviewColumns: null,
+      seekingPreviewTotalFrames: null,
+      seekingPreviewTileWidth: null,
+      seekingPreviewTileHeight: null,
     }
 
     queryClient.setQueryData<VideosResponse>(["videos"], (old) => {

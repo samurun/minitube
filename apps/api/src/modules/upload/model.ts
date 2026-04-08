@@ -10,7 +10,7 @@ export const uploadModels = {
         "video/x-msvideo",
         "video/x-matroska",
       ],
-      maxSize: "500m",
+      maxSize: "1024m", // Just a sanity check, actual limit is set higher in the server config
     }),
   }),
 }

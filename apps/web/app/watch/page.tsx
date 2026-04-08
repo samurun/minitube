@@ -63,7 +63,17 @@ export default async function Page({ searchParams }: PageProps) {
             videoUrl={res.video.videoUrl}
             thumbnailUrl={res.video.thumbnailUrl ?? null}
             seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
-            previewConfig={res.preview}
+            previewConfig={{
+              ...res.preview,
+              frameIntervalSeconds:
+                res.video.seekingPreviewInterval ??
+                res.preview.frameIntervalSeconds,
+              columnsPerRow:
+                res.video.seekingPreviewColumns ?? res.preview.columnsPerRow,
+              totalFrames: res.video.seekingPreviewTotalFrames,
+              tileWidthActual: res.video.seekingPreviewTileWidth,
+              tileHeightActual: res.video.seekingPreviewTileHeight,
+            }}
           />
           <div>
             <h1 className="text-lg font-bold">{res.video.title}</h1>
