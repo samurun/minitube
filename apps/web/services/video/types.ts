@@ -5,6 +5,7 @@ export interface Video {
   createdAt: string
   updatedAt: string
   videoUrl: string | null
+  duration: number | null
   thumbnailUrl: string | null
   seekingPreviewUrl: string | null
   seekingPreviewInterval: number | null

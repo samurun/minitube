@@ -165,6 +165,7 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
 
     return {
       path: `processed/${outputKey}`,
+      duration,
       interval,
       columns: columnsPerRow,
       totalFrames,

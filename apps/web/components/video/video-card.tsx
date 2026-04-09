@@ -1,3 +1,4 @@
+import { formatTime } from "@/lib/format-time"
 import type { Video } from "@/services/video/types"
 import { useDeleteVideo } from "@/services/video/use-delete-video"
 import { useQueryClient } from "@tanstack/react-query"
@@ -32,6 +33,9 @@ export function VideoCard({ video }: VideoCardProps) {
   const body = (
     <>
       <div className="relative aspect-video h-42 w-full overflow-hidden bg-muted">
+        <span className="absolute right-1 bottom-1 rounded bg-black/50 px-1 text-xs">
+          {formatTime(video.duration!)}
+        </span>
         {video.thumbnailUrl ? (
           <img
             src={video.thumbnailUrl}

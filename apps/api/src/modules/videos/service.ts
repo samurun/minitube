@@ -1,9 +1,16 @@
+import { Readable } from "node:stream"
+
 import { eq, desc } from "drizzle-orm"
 import { NotFoundError } from "elysia"
 
 import { db } from "../../database"
 import { videos } from "../../database/schema"
-import { deleteFromStorage, getPresignedReadUrl } from "../../storage"
+import {
+  deleteFromStorage,
+  getObjectRange,
+  getPresignedReadUrl,
+  statObject,
+} from "../../storage"
 import { config } from "../../config"
 
 type VideoRecord = typeof videos.$inferSelect
@@ -15,6 +22,7 @@ interface VideoResponse {
   createdAt: Date
   updatedAt: Date
   videoUrl: string | null
+  duration: number | null
   thumbnailUrl: string | null
   seekingPreviewUrl: string | null
   seekingPreviewInterval: number | null
@@ -26,8 +34,7 @@ interface VideoResponse {
 
 async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
   try {
-    const [videoUrl, thumbnailUrl, seekingPreviewUrl] = await Promise.all([
-      getPresignedReadUrl(video.rawPath, 600),
+    const [thumbnailUrl, seekingPreviewUrl] = await Promise.all([
       video.thumbnailPath
         ? getPresignedReadUrl(video.thumbnailPath, 600)
         : null,
@@ -35,6 +42,7 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
         ? getPresignedReadUrl(video.seekingPreviewPath, 600)
         : null,
     ])
+    const videoUrl = `/videos/${video.id}/stream`
 
     return {
       id: video.id,
@@ -42,6 +50,7 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       status: video.status,
       createdAt: video.createdAt,
       updatedAt: video.updatedAt,
+      duration: video.duration,
       videoUrl,
       thumbnailUrl,
       seekingPreviewUrl,
@@ -52,7 +61,10 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       seekingPreviewTileHeight: video.seekingPreviewTileHeight,
     }
   } catch (err) {
-    console.error(`Failed to generate presigned URLs for video ${video.id}:`, err)
+    console.error(
+      `Failed to generate presigned URLs for video ${video.id}:`,
+      err
+    )
     return {
       id: video.id,
       title: video.title,
@@ -60,6 +72,7 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       createdAt: video.createdAt,
       updatedAt: video.updatedAt,
       videoUrl: null,
+      duration: video.duration,
       thumbnailUrl: null,
       seekingPreviewUrl: null,
       seekingPreviewInterval: video.seekingPreviewInterval,
@@ -82,7 +95,6 @@ export const videoService = {
       .offset(offset)
     return {
       message: "Videos fetched successfully",
-      preview: config.preview,
       videos: await Promise.all(records.map(attachVideoUrls)),
     }
   },
@@ -100,8 +112,88 @@ export const videoService = {
 
     return {
       message: "Video fetched successfully",
-      preview: config.preview,
       video: await attachVideoUrls(video),
+    }
+  },
+
+  streamVideo: async (
+    id: number,
+    rangeHeader: string | null
+  ): Promise<{
+    body: ReadableStream
+    status: 200 | 206 | 416
+    headers: Record<string, string>
+  }> => {
+    const [video] = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, id))
+      .limit(1)
+
+    if (!video) {
+      throw new NotFoundError("Video not found")
+    }
+
+    const stat = await statObject(video.rawPath)
+    const size = stat.size
+    const contentType =
+      (stat.metaData && (stat.metaData["content-type"] as string)) ||
+      "video/mp4"
+
+    if (!rangeHeader) {
+      const stream = await getObjectRange(video.rawPath, 0, size)
+      return {
+        body: Readable.toWeb(stream) as unknown as ReadableStream,
+        status: 200,
+        headers: {
+          "content-type": contentType,
+          "content-length": String(size),
+          "accept-ranges": "bytes",
+          "cache-control": "no-store",
+        },
+      }
+    }
+
+    const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader)
+    if (!match || !match[1]) {
+      return {
+        body: new ReadableStream({ start: (c) => c.close() }),
+        status: 416,
+        headers: {
+          "content-range": `bytes */${size}`,
+          "content-type": contentType,
+        },
+      }
+    }
+
+    const start = parseInt(match[1], 10)
+    const requestedEnd = match[2] ? parseInt(match[2], 10) : size - 1
+    const end = Math.min(requestedEnd, size - 1)
+
+    if (Number.isNaN(start) || start >= size || end < start) {
+      return {
+        body: new ReadableStream({ start: (c) => c.close() }),
+        status: 416,
+        headers: {
+          "content-range": `bytes */${size}`,
+          "content-type": contentType,
+        },
+      }
+    }
+
+    const length = end - start + 1
+    const stream = await getObjectRange(video.rawPath, start, length)
+
+    return {
+      body: Readable.toWeb(stream) as unknown as ReadableStream,
+      status: 206,
+      headers: {
+        "content-type": contentType,
+        "content-length": String(length),
+        "content-range": `bytes ${start}-${end}/${size}`,
+        "accept-ranges": "bytes",
+        "cache-control": "no-store",
+      },
     }
   },
 
