@@ -63,6 +63,7 @@ export function UploadVideo() {
       status: "uploading",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      duration: null,
       videoUrl: null,
       thumbnailUrl: null,
       seekingPreviewUrl: null,

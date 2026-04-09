@@ -55,12 +55,20 @@ export default async function Page({ searchParams }: PageProps) {
 
   try {
     const res = await fetchVideo(videoId)
+    const apiBaseUrl =
+      process.env.NEXT_PUBLIC_API_URL ??
+      process.env.API_URL ??
+      "http://localhost:4000"
+    const videoUrl: string | null = res.video.videoUrl
+      ? `${apiBaseUrl}${res.video.videoUrl}`
+      : null
 
     return (
       <div className="flex flex-col gap-4 px-4 py-6 lg:flex-row">
         <div className="col-span-3 flex w-full flex-col gap-2">
           <Player
-            videoUrl={res.video.videoUrl}
+            videoUrl={videoUrl ?? ""}
+            duration={res.video.duration ?? 0}
             thumbnailUrl={res.video.thumbnailUrl ?? null}
             seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
             previewConfig={{

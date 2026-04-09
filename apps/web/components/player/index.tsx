@@ -1,11 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { cn } from "@workspace/ui/lib/utils"
 import { useVideoPlayer } from "@/hooks/use-player"
+import { useAutoHideControls } from "@/hooks/use-auto-hide-controls"
 import { PlayOverlay } from "./play-overlay"
 import { ProgressBar } from "./progress-bar"
 import { ControlBar } from "./control-bar"
-import { cn } from "@workspace/ui/lib/utils"
 
 export interface PreviewConfig {
   frameIntervalSeconds: number
@@ -20,6 +20,7 @@ export interface PreviewConfig {
 interface PlayerProps {
   videoUrl: string
   thumbnailUrl: string | null
+  duration?: number
   seekingPreviewUrl: string
   previewConfig: PreviewConfig
 }
@@ -27,82 +28,44 @@ interface PlayerProps {
 export function Player({
   videoUrl,
   thumbnailUrl,
+  duration: durationHint,
   seekingPreviewUrl,
   previewConfig,
 }: PlayerProps) {
-  const {
-    wrapperRef,
-    videoRef,
-    duration,
-    currentTime,
-    isPlaying,
-    volume,
-    isFullscreen,
-    isVideoReady,
-    isUserSeeking,
-    videoEvents,
-    togglePlay,
-    seek,
-    seekCommit,
-    changeVolume,
-    toggleMute,
-    toggleFullscreen,
-  } = useVideoPlayer()
+  const { refs, state, actions, videoEvents } = useVideoPlayer(durationHint)
+  const controls = useAutoHideControls({ active: state.isPlaying })
 
-  const [showControls, setShowControls] = useState(true)
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const resetHideTimer = useCallback(() => {
-    setShowControls(true)
-    if (hideTimer.current) clearTimeout(hideTimer.current)
-    hideTimer.current = setTimeout(() => setShowControls(false), 2500)
-  }, [])
-
-  const hideControlsNow = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current)
-    setShowControls(false)
-  }, [])
-
-  useEffect(() => {
-    if (!isPlaying) {
-      if (hideTimer.current) clearTimeout(hideTimer.current)
-      setShowControls(true)
-      return
-    }
-    resetHideTimer()
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current)
-    }
-  }, [isPlaying, resetHideTimer])
-
-  const controlsVisible = !isPlaying || showControls || isUserSeeking
+  const controlsVisible = !state.isPlaying || controls.visible || state.isUserSeeking
 
   return (
     <div
       data-slot="player-wrapper"
+      ref={refs.wrapper}
       className="group/player relative aspect-video w-full overflow-hidden rounded-2xl bg-black"
-      ref={wrapperRef}
-      onPointerMove={resetHideTimer}
-      onPointerLeave={() => isPlaying && hideControlsNow()}
+      onPointerMove={controls.show}
+      onPointerLeave={() => state.isPlaying && controls.hide()}
     >
       <video
-        ref={videoRef}
+        ref={refs.video}
         src={videoUrl}
         poster={thumbnailUrl ?? "/placeholder.svg"}
         preload="metadata"
         playsInline
-        muted={volume === 0}
+        muted={state.volume === 0}
         {...videoEvents}
         className="pointer-events-none h-full w-full object-contain"
       />
 
-      {/* click layer for play/pause — below overlay & controls */}
+      {/* click layer for play/pause — sits below overlay & controls */}
       <div
         className="absolute inset-0 z-10 cursor-pointer"
-        onClick={togglePlay}
+        onClick={actions.togglePlay}
       />
 
-      <PlayOverlay visible={!isPlaying && isVideoReady} onPlay={togglePlay} />
+      <PlayOverlay
+        visible={!state.isPlaying && state.isVideoReady}
+        onPlay={actions.togglePlay}
+      />
 
       <div
         data-slot="controls"
@@ -110,28 +73,28 @@ export function Player({
           "absolute inset-x-0 bottom-0 z-30 transition-opacity duration-300",
           controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
         )}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 pt-10 pb-4">
           <ProgressBar
-            duration={duration}
-            currentTime={currentTime}
+            duration={state.duration}
+            currentTime={state.currentTime}
+            buffered={state.buffered}
             seekingPreviewUrl={seekingPreviewUrl}
             previewConfig={previewConfig}
-            onSeek={seek}
-            onSeekCommit={seekCommit}
+            onSeek={actions.seek}
+            onSeekCommit={actions.seekCommit}
           />
 
           <ControlBar
-            isPlaying={isPlaying}
-            volume={volume}
-            isFullscreen={isFullscreen}
-            currentTime={currentTime}
-            duration={duration}
-            onTogglePlay={togglePlay}
-            onToggleMute={toggleMute}
-            onToggleFullscreen={toggleFullscreen}
-            onChangeVolume={changeVolume}
+            isPlaying={state.isPlaying}
+            volume={state.volume}
+            isFullscreen={state.isFullscreen}
+            currentTime={state.currentTime}
+            duration={state.duration}
+            onTogglePlay={actions.togglePlay}
+            onToggleMute={actions.toggleMute}
+            onToggleFullscreen={actions.toggleFullscreen}
+            onChangeVolume={actions.changeVolume}
           />
         </div>
       </div>

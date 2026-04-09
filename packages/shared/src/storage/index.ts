@@ -108,6 +108,20 @@ export function splitStoragePath(storagePath: string) {
   return { bucket, objectName }
 }
 
+export async function statObject(storagePath: string) {
+  const { bucket, objectName } = splitStoragePath(storagePath)
+  return await minioClient.statObject(bucket, objectName)
+}
+
+export async function getObjectRange(
+  storagePath: string,
+  offset: number,
+  length: number
+) {
+  const { bucket, objectName } = splitStoragePath(storagePath)
+  return await minioClient.getPartialObject(bucket, objectName, offset, length)
+}
+
 export async function getPresignedReadUrl(
   storagePath: string,
   expiresIn = 600

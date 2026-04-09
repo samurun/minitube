@@ -14,7 +14,23 @@ export async function handleThumbnail(job: ThumbnailJob) {
     // 1. Download raw video
     await minioClient.fGetObject(bucket, objectName, tmpInput)
 
-    // 2. Extract single frame at 1s
+    // 2. Probe duration
+    const probe = Bun.spawn([
+      "ffprobe",
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "csv=p=0",
+      tmpInput,
+    ])
+    const probeOut = await new Response(probe.stdout).text()
+    await probe.exited
+    const parsed = parseFloat(probeOut.trim())
+    const duration = !isNaN(parsed) && parsed > 0 ? parsed : null
+
+    // 3. Extract single frame at 1s
     const proc = Bun.spawn([
       "ffmpeg",
       "-y",
@@ -33,13 +49,13 @@ export async function handleThumbnail(job: ThumbnailJob) {
       throw new Error(`FFmpeg thumbnail failed (exit ${proc.exitCode})`)
     }
 
-    // 3. Upload to processed bucket
+    // 4. Upload to processed bucket
     const outputKey = `thumbnails/${videoId}.jpg`
     const file = Bun.file(tmpOutput)
     const buffer = Buffer.from(await file.arrayBuffer())
     await minioClient.putObject("processed", outputKey, buffer, buffer.length)
 
-    return `processed/${outputKey}`
+    return { path: `processed/${outputKey}`, duration }
   } finally {
     await unlink(tmpInput).catch(() => {})
     await unlink(tmpOutput).catch(() => {})

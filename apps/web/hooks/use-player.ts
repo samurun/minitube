@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   exitFullscreen,
   getFullscreenElement,
@@ -11,12 +11,42 @@ function safeDuration(value: number): number | null {
   return Number.isFinite(value) && value > 0 ? value : null
 }
 
-export function useVideoPlayer() {
+export interface VideoPlayerState {
+  duration: number
+  currentTime: number
+  buffered: number
+  isPlaying: boolean
+  volume: number
+  isFullscreen: boolean
+  isVideoReady: boolean
+  isUserSeeking: boolean
+}
+
+export interface VideoPlayerActions {
+  togglePlay: () => void
+  seek: (values: number[]) => void
+  seekCommit: () => void
+  changeVolume: (values: number[]) => void
+  toggleMute: () => void
+  toggleFullscreen: () => Promise<void>
+}
+
+/**
+ * Headless video player state. The hook owns the `<video>` element through
+ * `refs.video` and surfaces state, imperative actions, and the event handlers
+ * that must be spread onto the element.
+ *
+ * `durationHint` is an optional value (e.g. from the API) used until the
+ * browser reports its own duration via `loadedmetadata`. The browser value
+ * always wins once available.
+ */
+export function useVideoPlayer(durationHint = 0) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  const [duration, setDuration] = useState(0)
+  const [elementDuration, setElementDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
+  const [buffered, setBuffered] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolume] = useState(1)
   const [lastVolume, setLastVolume] = useState(1)
@@ -24,6 +54,10 @@ export function useVideoPlayer() {
   const [isVideoReady, setIsVideoReady] = useState(false)
   const isSeeking = useRef(false)
   const [isUserSeeking, setIsUserSeeking] = useState(false)
+
+  // Browser-reported duration is the source of truth; fall back to the hint
+  // until metadata loads. Re-evaluated each render so prop changes propagate.
+  const duration = elementDuration > 0 ? elementDuration : durationHint
 
   // Sync volume to video element
   useEffect(() => {
@@ -42,13 +76,10 @@ export function useVideoPlayer() {
     })
   }, [])
 
-  const trySetDuration = useCallback(
-    (el: HTMLVideoElement) => {
-      const d = safeDuration(el.duration)
-      if (d !== null && duration === 0) setDuration(d)
-    },
-    [duration]
-  )
+  const syncDuration = useCallback((el: HTMLVideoElement) => {
+    const d = safeDuration(el.duration)
+    if (d !== null) setElementDuration(d)
+  }, [])
 
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return
@@ -111,49 +142,75 @@ export function useVideoPlayer() {
         await requestFullscreen(wrapperRef.current, videoRef.current)
       }
     } catch {
-      // Fullscreen requests can fail (for example, unsupported API or
-      // browser/user-gesture restrictions). Ignore the failure and let
-      // fullscreen state continue to be driven by fullscreenchange events.
+      // Fullscreen requests can fail (unsupported API or user-gesture
+      // restrictions). Ignore — state stays driven by fullscreenchange events.
     }
+  }, [])
+
+  const updateBuffered = useCallback((el: HTMLVideoElement) => {
+    const ranges = el.buffered
+    const t = el.currentTime
+    let end = 0
+    for (let i = 0; i < ranges.length; i++) {
+      const start = ranges.start(i)
+      const finish = ranges.end(i)
+      if (start <= t && finish >= t) {
+        end = finish
+        break
+      }
+      if (finish > end) end = finish
+    }
+    setBuffered(end)
   }, [])
 
   const videoEvents = {
     onCanPlay: (e: React.SyntheticEvent<HTMLVideoElement>) => {
       setIsVideoReady(true)
-      trySetDuration(e.currentTarget)
+      syncDuration(e.currentTarget)
     },
     onLoadedMetadata: (e: React.SyntheticEvent<HTMLVideoElement>) =>
-      trySetDuration(e.currentTarget),
+      syncDuration(e.currentTarget),
     onDurationChange: (e: React.SyntheticEvent<HTMLVideoElement>) =>
-      trySetDuration(e.currentTarget),
+      syncDuration(e.currentTarget),
     onPlay: (e: React.SyntheticEvent<HTMLVideoElement>) => {
       setIsPlaying(true)
-      trySetDuration(e.currentTarget)
+      syncDuration(e.currentTarget)
     },
     onTimeUpdate: (e: React.SyntheticEvent<HTMLVideoElement>) => {
       if (!isSeeking.current) {
         setCurrentTime(e.currentTarget.currentTime || 0)
       }
+      updateBuffered(e.currentTarget)
     },
+    onProgress: (e: React.SyntheticEvent<HTMLVideoElement>) =>
+      updateBuffered(e.currentTarget),
     onPause: () => setIsPlaying(false),
   }
 
-  return {
-    wrapperRef,
-    videoRef,
+  const state: VideoPlayerState = {
     duration,
     currentTime,
+    buffered,
     isPlaying,
     volume,
     isFullscreen,
     isVideoReady,
     isUserSeeking,
-    videoEvents,
+  }
+
+  const actions: VideoPlayerActions = {
     togglePlay,
     seek,
     seekCommit,
     changeVolume,
     toggleMute,
     toggleFullscreen,
+  }
+
+  return {
+    refs: { wrapper: wrapperRef, video: videoRef },
+    state,
+    actions,
+    videoEvents,
   }
 }

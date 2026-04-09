@@ -23,6 +23,24 @@ export const videoRoute = new Elysia({ prefix: "/videos" })
       params: videoModels.videoIdParams,
     }
   )
+  .get(
+    "/:id/stream",
+    async ({ params, request, set }) => {
+      const result = await videoService.streamVideo(
+        params.id,
+        request.headers.get("range")
+      )
+      set.status = result.status
+      for (const [key, value] of Object.entries(result.headers)) {
+        set.headers[key] = value
+      }
+      return result.body
+    },
+    {
+      tags: ["Video"],
+      params: videoModels.videoIdParams,
+    }
+  )
   .delete(
     "/:id",
     async ({ params }) => {
