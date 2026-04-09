@@ -50,26 +50,26 @@ services:
     depends_on:
       - db
       - minio
-      # - rabbitmq
+      - rabbitmq
 
-  # rabbitmq:
-  #   image: rabbitmq:3-management-alpine
-  #   container_name: rabbitmq
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./.env
-  #   environment:
-  #     RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
-  #     RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
-  #   ports:
-  #     - "${RABBITMQ_PORT}:5672"
-  #     - "${RABBITMQ_MANAGEMENT_PORT}:15672"
-  #     - "15692:15692"
-  #   volumes:
-  #     - rabbitmq_data:/var/lib/rabbitmq
-  #   command: >
-  #     sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus &&
-  #            docker-entrypoint.sh rabbitmq-server"
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    ports:
+      - "${RABBITMQ_PORT}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT}:15672"
+      - "15692:15692"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    command: >
+      sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus &&
+             docker-entrypoint.sh rabbitmq-server"
 
   web:
     build:
@@ -97,7 +97,7 @@ services:
     depends_on:
       - db
       - minio
-      # - rabbitmq
+      - rabbitmq
 
   prometheus:
     image: prom/prometheus:latest
@@ -162,6 +162,6 @@ services:
 volumes:
   postgres_data:
   minio_data:
-  # rabbitmq_data:
+  rabbitmq_data:
   prometheus_data:
   grafana_data:
