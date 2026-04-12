@@ -1,7 +1,7 @@
 import { minioClient } from "@workspace/shared/storage"
 import { splitStoragePath } from "@workspace/shared/storage"
 import type { SeekingPreviewJob } from "@workspace/shared/rabbitmq"
-import { unlink } from "node:fs/promises"
+import { mkdir, readdir, rm, unlink } from "node:fs/promises"
 
 interface VideoMeta {
   duration: number
@@ -54,8 +54,10 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
   const minInterval = job.frameIntervalSeconds
   const { bucket, objectName } = splitStoragePath(rawPath)
 
-  const tmpInput = `/tmp/preview-in-${videoId}-${Date.now()}.mp4`
-  const tmpOutput = `/tmp/preview-out-${videoId}-${Date.now()}.jpg`
+  const stamp = Date.now()
+  const tmpInput = `/tmp/preview-in-${videoId}-${stamp}.mp4`
+  const tmpFramesDir = `/tmp/preview-frames-${videoId}-${stamp}`
+  const tmpOutput = `/tmp/preview-out-${videoId}-${stamp}.jpg`
 
   const log = (stage: string, extra = "") =>
     console.log(
@@ -82,76 +84,96 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
     // aspect ratio. Round to even numbers (libx264/jpeg-friendly).
     const tileWidth = maxTileWidth
     const rawTileHeight = Math.round((tileWidth * srcH) / srcW)
-    const tileHeight = rawTileHeight % 2 === 0 ? rawTileHeight : rawTileHeight + 1
+    const tileHeight =
+      rawTileHeight % 2 === 0 ? rawTileHeight : rawTileHeight + 1
 
     log(
       "ffprobe:done",
       `duration=${duration.toFixed(1)}s ${srcW}x${srcH} interval=${interval}s tile=${tileWidth}x${tileHeight} grid=${columnsPerRow}x${rows}`
     )
 
-    // 3. Generate sprite sheet
-    log("ffmpeg:start")
-    const vf = `fps=1/${interval},scale=${tileWidth}:${tileHeight},tile=${columnsPerRow}x${rows}`
-    const proc = Bun.spawn(
+    // 3. Two-pass sprite generation:
+    //    Pass 1 extracts one scaled frame per `interval` seconds into a temp
+    //    directory. We poll the directory while ffmpeg runs and log progress
+    //    from file count — this is independent of ffmpeg's stderr buffering
+    //    (which behaves differently with the tile filter and gives no useful
+    //    progress signal).
+    //    Pass 2 stitches the extracted frames into the sprite sheet. It's
+    //    near-instant so it needs no progress reporting.
+    await mkdir(tmpFramesDir, { recursive: true })
+
+    log("ffmpeg:start", `pass=extract frames=${totalFrames}`)
+    const pass1 = Bun.spawn(
       [
         "ffmpeg",
+        "-threads",
+        "1",
         "-y",
         "-i",
         tmpInput,
         "-vf",
-        vf,
+        `fps=1/${interval},scale=${tileWidth}:${tileHeight}`,
+        "-q:v",
+        "10",
+        `${tmpFramesDir}/f%04d.jpg`,
+      ],
+      { stdout: "pipe", stderr: "pipe" }
+    )
+
+    // Poll the frames directory while ffmpeg runs. Only log when the frame
+    // count actually advances so we never print the same number twice.
+    let lastCount = -1
+    const poll = setInterval(async () => {
+      try {
+        const files = await readdir(tmpFramesDir)
+        const n = files.length
+        if (n === lastCount) return
+        lastCount = n
+        const pct = Math.min(100, (n / totalFrames) * 100)
+        log(
+          "ffmpeg:progress",
+          `${pct.toFixed(0)}% (${n}/${totalFrames} frames) ${elapsed()}`
+        )
+      } catch {
+        // dir might briefly not exist between mkdir and first write
+      }
+    }, 500)
+
+    const pass1StderrTail = new Response(pass1.stderr).text()
+    await pass1.exited
+    clearInterval(poll)
+    if (pass1.exitCode !== 0) {
+      const tail = (await pass1StderrTail).slice(-500)
+      throw new Error(`FFmpeg pass1 failed (exit ${pass1.exitCode}): ${tail}`)
+    }
+    log("ffmpeg:pass1:done", elapsed())
+
+    // Pass 2: tile the extracted frames. Fast — no progress needed.
+    const pass2 = Bun.spawn(
+      [
+        "ffmpeg",
+        "-threads",
+        "1",
+        "-y",
+        "-framerate",
+        "1",
+        "-i",
+        `${tmpFramesDir}/f%04d.jpg`,
+        "-vf",
+        `tile=${columnsPerRow}x${rows}`,
+        "-frames:v",
+        "1",
         "-q:v",
         "10",
         tmpOutput,
       ],
       { stdout: "pipe", stderr: "pipe" }
     )
-
-    // Parse stderr for `time=HH:MM:SS.xx` (input decode position).
-    // We can't use stdout `-progress out_time_ms` because the tile filter
-    // produces only one output frame, so out_time stays at 0 the whole run.
-    let stderrTail = ""
-    ;(async () => {
-      const reader = proc.stderr.getReader()
-      const decoder = new TextDecoder()
-      let buf = ""
-      let lastLogged = 0
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value)
-        stderrTail = (stderrTail + chunk).slice(-2000)
-        // ffmpeg uses \r to overwrite the stats line
-        buf += chunk.replace(/\r/g, "\n")
-        const lines = buf.split("\n")
-        buf = lines.pop() ?? ""
-        for (const line of lines) {
-          const m = line.match(/time=(\d+):(\d{2}):(\d{2})\.(\d+)/)
-          if (m) {
-            const seconds =
-              Number(m[1]) * 3600 +
-              Number(m[2]) * 60 +
-              Number(m[3]) +
-              Number(`0.${m[4]}`)
-            const pct = Math.min(100, (seconds / duration) * 100)
-            const now = Date.now()
-            if (now - lastLogged > 5000) {
-              log(
-                "ffmpeg:progress",
-                `${pct.toFixed(1)}% (${seconds.toFixed(0)}/${duration.toFixed(0)}s) ${elapsed()}`
-              )
-              lastLogged = now
-            }
-          }
-        }
-      }
-    })()
-
-    await proc.exited
-    if (proc.exitCode !== 0) {
-      throw new Error(
-        `FFmpeg sprite sheet failed (exit ${proc.exitCode}): ${stderrTail.slice(-500)}`
-      )
+    const pass2StderrTail = new Response(pass2.stderr).text()
+    await pass2.exited
+    if (pass2.exitCode !== 0) {
+      const tail = (await pass2StderrTail).slice(-500)
+      throw new Error(`FFmpeg pass2 failed (exit ${pass2.exitCode}): ${tail}`)
     }
     log("ffmpeg:done", elapsed())
 
@@ -175,5 +197,6 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
   } finally {
     await unlink(tmpInput).catch(() => {})
     await unlink(tmpOutput).catch(() => {})
+    await rm(tmpFramesDir, { recursive: true, force: true }).catch(() => {})
   }
 }

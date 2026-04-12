@@ -1,0 +1,14 @@
+{
+  "name": "worker-thumbnail",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/shared": "workspace:*",
+    "@workspace/worker-core": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}

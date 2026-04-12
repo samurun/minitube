@@ -1,0 +1,13 @@
+{
+  "name": "@workspace/worker-core",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}

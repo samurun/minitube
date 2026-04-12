@@ -33,6 +33,8 @@ export async function handleThumbnail(job: ThumbnailJob) {
     // 3. Extract single frame at 1s
     const proc = Bun.spawn([
       "ffmpeg",
+      "-threads",
+      "1",
       "-y",
       "-ss",
       "1",

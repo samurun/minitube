@@ -1,4 +1,5 @@
 import amqplib, { type ChannelModel, type Channel } from "amqplib"
+export type { Channel } from "amqplib"
 import { config } from "../config"
 
 export const QUEUE = {
