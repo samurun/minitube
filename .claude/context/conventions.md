@@ -30,6 +30,7 @@ the repo.
   - `@workspace/shared/database`
   - `@workspace/shared/storage`
   - `@workspace/shared/rabbitmq`
+  - `@workspace/shared/logger`
 - **Video uploads must stream** — use `uploadStreamToRawBucket`, never buffer
   the full file in the API. See
   [.claude/context/data-and-infra.md](./data-and-infra.md) for the rationale.
@@ -44,6 +45,19 @@ the repo.
 - **Thumbnail config IS in .env** — `THUMBNAIL_TIMESTAMP_SEC` (default 1),
   `THUMBNAIL_QUALITY` (default 2, JPEG 1-31 scale).
 - **Upload max size is in .env** — `UPLOAD_MAX_SIZE_MB` (default 1024 = 1GB).
+- **Worker shared utilities** — `probeVideo`, `probeDuration`, and `runFFmpeg`
+  live in `@workspace/worker-core`. Don't duplicate ffprobe/ffmpeg logic in
+  individual worker handlers.
+- **Workers use graceful shutdown** — `registerConsumer` returns a
+  `ConsumerHandle` with a `drain()` method. On SIGTERM, call `drain()` to
+  finish in-flight jobs before closing the RabbitMQ connection.
+- **Retry uses exponential backoff** — failed jobs wait `1s * 2^attempt` before
+  requeue.
+- **Delete confirmation** — destructive UI actions (e.g. video delete) should
+  use `AlertDialog` from `@workspace/ui` for confirmation.
+- **Structured logging** — use `createLogger(service)` from
+  `@workspace/shared/logger` for JSON-formatted, level-aware logs. The logger
+  supports `.child({ videoId })` for adding context.
 
 ## Adding shadcn/ui components
 

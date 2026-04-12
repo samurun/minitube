@@ -6,7 +6,8 @@
     "./database": "./src/database/index.ts",
     "./database/schema": "./src/database/schema.ts",
     "./storage": "./src/storage/index.ts",
-    "./rabbitmq": "./src/rabbitmq/index.ts"
+    "./rabbitmq": "./src/rabbitmq/index.ts",
+    "./logger": "./src/logger/index.ts"
   },
   "dependencies": {
     "amqplib": "^0.10.7",

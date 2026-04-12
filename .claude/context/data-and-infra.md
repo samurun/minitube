@@ -44,6 +44,10 @@ Columns of note:
   - `seekingPreviewTileWidth`
   - `seekingPreviewTileHeight`
 
+Indexes:
+
+- `idx_videos_created_at` — DESC on `created_at` (used by `getVideos` ORDER BY)
+
 Migrations:
 
 ```bash
@@ -61,10 +65,14 @@ bunx drizzle-kit push        # apply schema changes to the DB
 
 Resource caps per service:
 
-- `api`: `cpus: 1.5`, `mem_limit: 1g`
+- `api`: `cpus: 1.5`, `mem_limit: 1g` — has a Docker healthcheck that curls
+  `/health` every 10s
 - `worker-thumbnail`: `cpus: 0.5`, `mem_limit: 512m` (lightweight, single frame extraction)
 - `worker-preview`: `cpus: 1.5`, `mem_limit: 1g` (CPU-intensive sprite generation)
 - `worker-transcode`: `cpus: 2.0`, `mem_limit: 2g` (CPU-intensive multi-variant HLS encoding)
+
+The `web` service depends on `api` with `condition: service_healthy`, so it
+waits for the API health check to pass before starting.
 
 Each worker has its own Dockerfile:
 

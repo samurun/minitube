@@ -1,7 +1,18 @@
+import { useState } from "react"
 import { formatTime } from "@/lib/format-time"
 import type { Video } from "@/services/video/types"
 import { useDeleteVideo } from "@/services/video/use-delete-video"
 import { useQueryClient } from "@tanstack/react-query"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import {
@@ -17,6 +28,7 @@ import {
   Loader2,
   Loader2Icon,
 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 
 interface VideoCardProps {
@@ -24,6 +36,7 @@ interface VideoCardProps {
 }
 
 export function VideoCard({ video }: VideoCardProps) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const queryClient = useQueryClient()
   const deleteVideoMutation = useDeleteVideo()
   const isUploading = video.status === "uploading"
@@ -37,10 +50,13 @@ export function VideoCard({ video }: VideoCardProps) {
           {formatTime(video.duration!)}
         </span>
         {video.thumbnailUrl ? (
-          <img
+          <Image
             src={video.thumbnailUrl}
             alt={video.title}
-            className="h-full w-full object-contain"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-contain"
+            unoptimized
           />
         ) : (
           <div
@@ -109,6 +125,26 @@ export function VideoCard({ video }: VideoCardProps) {
           <DropdownMenuContent className="min-w-9">
             <DropdownMenuItem
               variant="destructive"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              ลบ
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ลบวิดีโอ</AlertDialogTitle>
+            <AlertDialogDescription>
+              คุณแน่ใจหรือไม่ว่าต้องการลบ &ldquo;{video.title}&rdquo;?
+              การดำเนินการนี้ไม่สามารถย้อนกลับได้
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
               onClick={() => {
                 deleteVideoMutation.mutate(String(video.id), {
                   onSuccess: () => {
@@ -120,10 +156,10 @@ export function VideoCard({ video }: VideoCardProps) {
               }}
             >
               ลบ
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {isUploading ? (
         <div className="block">{body}</div>

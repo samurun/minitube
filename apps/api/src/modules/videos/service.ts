@@ -218,6 +218,14 @@ export const videoService = {
     body: ReadableStream
     headers: Record<string, string>
   }> => {
+    // Prevent path traversal — only allow safe HLS file paths
+    if (
+      hlsSubPath.includes("..") ||
+      !/^[\w\-\/]+\.(m3u8|ts)$/.test(hlsSubPath)
+    ) {
+      throw new NotFoundError("Invalid HLS path")
+    }
+
     const [video] = await db
       .select()
       .from(videos)

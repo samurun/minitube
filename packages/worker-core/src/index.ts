@@ -1,3 +1,7 @@
 export { registerConsumer } from "./consumer"
-export type { BaseJob, ConsumerConfig } from "./consumer"
+export type { BaseJob, ConsumerConfig, ConsumerHandle } from "./consumer"
 export { updateVideoField } from "./video-state"
+export { probeVideo, probeDuration } from "./probe"
+export type { VideoMeta } from "./probe"
+export { runFFmpeg } from "./ffmpeg"
+export type { RunFFmpegOptions } from "./ffmpeg"

@@ -54,7 +54,8 @@ storage → playback) or where a piece of state lives.
 
 Workers are **split into separate processes per job type** for independent
 scaling and resource isolation. Shared logic (generic consumer with
-retry/ack, race-safe video status updates) lives in
+retry/ack, race-safe video status updates, `probeVideo`/`probeDuration`
+ffprobe wrappers, `runFFmpeg` spawn helper) lives in
 [packages/worker-core](../../packages/worker-core).
 
 5. Each worker process consumes one job at a time (`ch.prefetch(1)`) and
@@ -89,8 +90,9 @@ retry/ack, race-safe video status updates) lives in
    Runs on Debian (`cpus: 2.0`, `mem_limit: 2g` — heavier than other workers).
 9. Each worker uploads results to the MinIO `processed` bucket and updates the
    PostgreSQL row with the path and any metadata.
-10. On failure: retry up to 3 times, then mark the row as `failed` with the
-    error message.
+10. On failure: retry up to 3 times with **exponential backoff** (1s, 2s, 4s),
+    then mark the row as `failed` with the error message. Message ack happens
+    only after retry/onFailed completes so in-flight jobs aren't lost on error.
 11. Video `status` transitions to `completed` only when all three jobs
     (thumbnail + preview + transcode) succeed. Race-safe via
     `WHERE status='pending'`.
@@ -101,15 +103,19 @@ retry/ack, race-safe video status updates) lives in
     MinIO URLs and the HLS playlist URL.
 12. When HLS is available (`hlsUrl` is set), the frontend uses **hls.js** for
     adaptive bitrate streaming. hls.js fetches the master `.m3u8` from the API
-    (`GET /videos/:id/hls/*`), which proxies files from MinIO. The player
-    automatically switches quality based on bandwidth, and a quality selector
-    UI lets users override manually.
+    (`GET /videos/:id/hls/*`), which proxies files from MinIO. The HLS endpoint
+    validates subpaths against `..` traversal and restricts to `.m3u8`/`.ts`
+    extensions. The player automatically switches quality based on bandwidth,
+    and a quality selector UI lets users override manually.
 13. When HLS is not yet available (transcode still pending), the player falls
     back to streaming the raw video via `GET /videos/:id/stream` with HTTP
     Range request support.
 14. The seeking preview reads the sprite sheet and computes the correct tile
     offset using the persisted sprite metadata (interval, columns, total
     frames, tile width/height) — no re-probing required.
+15. The Player component is loaded via `next/dynamic` with `ssr: false` to
+    keep hls.js out of the initial bundle. A `PlayerErrorBoundary` catches
+    runtime errors and offers a retry button.
 
 ## MinIO bucket layout
 

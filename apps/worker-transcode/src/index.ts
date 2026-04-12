@@ -6,8 +6,14 @@ import {
   QUEUE,
   type TranscodeJob,
 } from "@workspace/shared/rabbitmq"
-import { registerConsumer, updateVideoField } from "@workspace/worker-core"
+import {
+  registerConsumer,
+  updateVideoField,
+  type ConsumerHandle,
+} from "@workspace/worker-core"
 import { handleTranscode, type TranscodeResult } from "./handler"
+
+let consumer: ConsumerHandle
 
 async function start() {
   console.log("Worker (transcode) starting...")
@@ -16,7 +22,7 @@ async function start() {
 
   await ch.prefetch(1)
 
-  registerConsumer<TranscodeJob, TranscodeResult>(ch, {
+  consumer = registerConsumer<TranscodeJob, TranscodeResult>(ch, {
     queue: QUEUE.TRANSCODE,
     label: "transcode",
     maxRetries: config.worker.maxRetries,
@@ -39,7 +45,8 @@ async function start() {
 }
 
 const shutdown = async () => {
-  console.log("\nWorker (transcode) shutting down...")
+  console.log("\nWorker (transcode) shutting down — draining in-flight job...")
+  await consumer?.drain()
   await closeRabbitMQ()
   process.exit(0)
 }
