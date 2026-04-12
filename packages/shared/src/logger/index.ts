@@ -24,14 +24,16 @@ interface Logger {
 }
 
 const minLevel: LogLevel =
-  (process.env.LOG_LEVEL as LogLevel | undefined) ?? "info"
+  ((globalThis.process?.env?.LOG_LEVEL ?? Bun.env.LOG_LEVEL) as
+    | LogLevel
+    | undefined) ?? "info"
 
 function emit(entry: LogEntry) {
   const out = JSON.stringify(entry)
   if (entry.level === "error") {
-    process.stderr.write(out + "\n")
+    console.error(out)
   } else {
-    process.stdout.write(out + "\n")
+    console.log(out)
   }
 }
 
