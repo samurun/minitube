@@ -11,7 +11,8 @@ minitube/
 │   ├── web/               → Next.js 16, React 19, Tailwind 4, React Query
 │   ├── api/               → Elysia (Bun), re-exports @workspace/shared
 │   ├── worker-thumbnail/  → Bun, FFmpeg, consumes video.thumbnail queue
-│   └── worker-preview/    → Bun, FFmpeg, consumes video.seeking-preview queue
+│   ├── worker-preview/    → Bun, FFmpeg, consumes video.seeking-preview queue
+│   └── worker-transcode/  → Bun, FFmpeg, consumes video.transcode queue (HLS)
 └── packages/
     ├── shared/            → config, database, storage, rabbitmq (shared by api + workers)
     ├── worker-core/       → generic consumer, retry logic, video-state updates (shared by workers)
@@ -26,6 +27,7 @@ minitube/
 | [apps/api](../../apps/api) | Elysia on Bun runtime, re-exports from `@workspace/shared` |
 | [apps/worker-thumbnail](../../apps/worker-thumbnail) | Bun + FFmpeg, thumbnail extraction (Alpine image) |
 | [apps/worker-preview](../../apps/worker-preview) | Bun + FFmpeg, sprite-sheet seeking preview (Debian image) |
+| [apps/worker-transcode](../../apps/worker-transcode) | Bun + FFmpeg, multi-variant HLS transcode (Debian image) |
 | [packages/shared](../../packages/shared) | Shared config, Drizzle ORM database, MinIO storage, RabbitMQ |
 | [packages/worker-core](../../packages/worker-core) | Generic consumer wrapper, retry/ack, race-safe video status updates |
 | [packages/ui](../../packages/ui) | Shared shadcn/ui component library (Radix UI primitives) |
@@ -34,7 +36,7 @@ minitube/
 
 ### Adding a new worker
 
-To add a new job type (e.g. `worker-transcode`):
+To add a new job type (e.g. `worker-foo`):
 
 1. Add the queue + job type in [packages/shared/src/rabbitmq](../../packages/shared/src/rabbitmq)
 2. Create `apps/worker-<name>/` with `package.json`, `tsconfig.json`, `src/index.ts`, `src/handler.ts`

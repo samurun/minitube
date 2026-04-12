@@ -7,7 +7,7 @@ import { initStorage } from "./storage"
 import { connectRabbitMQ, closeRabbitMQ } from "@workspace/shared/rabbitmq"
 import { healthRoute } from "./modules/health"
 import { uploadRoute } from "./modules/upload"
-import { videoRoute } from "./modules/videos"
+import { videoRoute, hlsRoute } from "./modules/videos"
 
 const app = new Elysia()
   // Enable CORS for configured origins
@@ -19,6 +19,7 @@ const app = new Elysia()
   // Import routes
   .use(healthRoute)
   .use(uploadRoute)
+  .use(hlsRoute)
   .use(videoRoute)
 
 // Initialize services

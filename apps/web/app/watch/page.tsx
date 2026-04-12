@@ -62,22 +62,28 @@ export default async function Page({ searchParams }: PageProps) {
     const videoUrl: string | null = res.video.videoUrl
       ? `${apiBaseUrl}${res.video.videoUrl}`
       : null
+    const hlsUrl: string | null = res.video.hlsUrl
+      ? `${apiBaseUrl}${res.video.hlsUrl}`
+      : null
 
     return (
       <div className="flex flex-col gap-4 px-4 py-6 lg:flex-row">
         <div className="col-span-3 flex w-full flex-col gap-2">
           <Player
             videoUrl={videoUrl ?? ""}
+            hlsUrl={hlsUrl}
             duration={res.video.duration ?? 0}
             thumbnailUrl={res.video.thumbnailUrl ?? null}
             seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
             previewConfig={{
-              ...res.preview,
+              ...(res.preview ?? {}),
               frameIntervalSeconds:
                 res.video.seekingPreviewInterval ??
-                res.preview.frameIntervalSeconds,
+                res.preview?.frameIntervalSeconds ?? 0,
               columnsPerRow:
-                res.video.seekingPreviewColumns ?? res.preview.columnsPerRow,
+                res.video.seekingPreviewColumns ?? res.preview?.columnsPerRow ?? 10,
+              tileWidth: res.preview?.tileWidth ?? 160,
+              tileHeight: res.preview?.tileHeight ?? 90,
               totalFrames: res.video.seekingPreviewTotalFrames,
               tileWidthActual: res.video.seekingPreviewTileWidth,
               tileHeightActual: res.video.seekingPreviewTileHeight,

@@ -25,7 +25,7 @@ storage → playback) or where a piece of state lives.
                         │                          ▲           ▲           │      │
                         │                          │           │           ▼      │
                         │                          │           │     ┌──────────┐ │
-                        │                          └───────────┼─────│  Worker  │ │
+                        │                          └───────────┼─────│ Workers  │ │
                         │                                      └─────│  (Bun)   │ │
                         │                                            └──────────┘ │
                         └─────────────────────────────────────────────────────────┘
@@ -40,9 +40,10 @@ storage → playback) or where a piece of state lives.
    API process never buffers the entire video. See
    [apps/api/src/modules/upload/service.ts](../../apps/api/src/modules/upload/service.ts).
 3. The API inserts a row in PostgreSQL with `status: pending`.
-4. The API publishes two jobs to RabbitMQ:
+4. The API publishes three jobs to RabbitMQ:
    - `video.thumbnail` → extract a frame at 1s
    - `video.seeking-preview` → generate a sprite sheet
+   - `video.transcode` → generate multi-variant HLS streams
 
 > The upload route deliberately bypasses Elysia's `t.File()` body validator
 > (it has been unstable for large multipart uploads across Elysia versions) and
@@ -75,17 +76,38 @@ retry/ack, race-safe video status updates) lives in
    - See [apps/worker-preview/src/handler.ts](../../apps/worker-preview/src/handler.ts).
    Runs on Debian (needs `stdbuf` from coreutils for line-buffered FFmpeg
    stderr).
-8. The worker uploads results to the MinIO `processed` bucket and updates the
-   PostgreSQL row with the path and any sprite metadata.
-9. On failure: retry up to 3 times, then mark the row as `failed` with the
+8. **`worker-transcode`** generates multi-variant HLS output:
+   - Probes source resolution via `ffprobe`, filters quality presets
+     (360p/480p/720p/1080p) to only include variants ≤ source resolution.
+   - Single-pass FFmpeg with `-filter_complex` `split` + `scale` per variant,
+     `-var_stream_map`, and `-master_pl_name` to produce a master `.m3u8`,
+     per-variant `.m3u8` playlists, and `.ts` segments in one decode pass.
+   - Key flags: `-sc_threshold 0` (keyframe alignment across variants),
+     `-g 48 -keyint_min 48` (fixed keyframe interval), `-hls_playlist_type vod`.
+   - Uploads the entire output directory to MinIO `processed/hls/{videoId}/`.
+   - See [apps/worker-transcode/src/handler.ts](../../apps/worker-transcode/src/handler.ts).
+   Runs on Debian (`cpus: 2.0`, `mem_limit: 2g` — heavier than other workers).
+9. Each worker uploads results to the MinIO `processed` bucket and updates the
+   PostgreSQL row with the path and any metadata.
+10. On failure: retry up to 3 times, then mark the row as `failed` with the
     error message.
+11. Video `status` transitions to `completed` only when all three jobs
+    (thumbnail + preview + transcode) succeed. Race-safe via
+    `WHERE status='pending'`.
 
 ## Playback flow
 
 11. The Web app fetches video metadata from the API, including presigned
-    MinIO URLs.
-12. The HTML5 player streams the video from MinIO directly.
-13. The seeking preview reads the sprite sheet and computes the correct tile
+    MinIO URLs and the HLS playlist URL.
+12. When HLS is available (`hlsUrl` is set), the frontend uses **hls.js** for
+    adaptive bitrate streaming. hls.js fetches the master `.m3u8` from the API
+    (`GET /videos/:id/hls/*`), which proxies files from MinIO. The player
+    automatically switches quality based on bandwidth, and a quality selector
+    UI lets users override manually.
+13. When HLS is not yet available (transcode still pending), the player falls
+    back to streaming the raw video via `GET /videos/:id/stream` with HTTP
+    Range request support.
+14. The seeking preview reads the sprite sheet and computes the correct tile
     offset using the persisted sprite metadata (interval, columns, total
     frames, tile width/height) — no re-probing required.
 
@@ -96,5 +118,10 @@ MinIO
 ├── raw/                      → uploaded original videos
 └── processed/
     ├── thumbnails/           → {videoId}.jpg
-    └── seeking-previews/     → {videoId}.jpg (sprite sheet)
+    ├── seeking-previews/     → {videoId}.jpg (sprite sheet)
+    └── hls/{videoId}/        → adaptive bitrate HLS output
+        ├── master.m3u8       → master playlist
+        ├── 720p/playlist.m3u8 + segment_*.ts
+        ├── 480p/playlist.m3u8 + segment_*.ts
+        └── 360p/playlist.m3u8 + segment_*.ts
 ```

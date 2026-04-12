@@ -12,6 +12,9 @@ type VideoUpdate = Partial<{
   seekingPreviewTotalFrames: number | null
   seekingPreviewTileWidth: number | null
   seekingPreviewTileHeight: number | null
+  hlsPath: string | null
+  hlsErrorMessage: string | null
+  hlsVariants: string | null
 }>
 
 export async function updateVideoField(
@@ -37,9 +40,10 @@ export async function updateVideoField(
   const thumbnailDone = video.thumbnailPath || video.thumbnailErrorMessage
   const previewDone =
     video.seekingPreviewPath || video.seekingPreviewErrorMessage
+  const transcodeDone = video.hlsPath || video.hlsErrorMessage
 
-  if (thumbnailDone && previewDone) {
-    const allGood = video.thumbnailPath && video.seekingPreviewPath
+  if (thumbnailDone && previewDone && transcodeDone) {
+    const allGood = video.thumbnailPath && video.seekingPreviewPath && video.hlsPath
     const finalStatus = allGood ? "completed" : "failed"
 
     const [updated] = await db
