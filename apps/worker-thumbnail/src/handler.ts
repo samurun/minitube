@@ -1,3 +1,4 @@
+import { config } from "@workspace/shared/config"
 import { minioClient } from "@workspace/shared/storage"
 import { splitStoragePath } from "@workspace/shared/storage"
 import type { ThumbnailJob } from "@workspace/shared/rabbitmq"
@@ -6,6 +7,8 @@ import { unlink } from "node:fs/promises"
 export async function handleThumbnail(job: ThumbnailJob) {
   const { videoId, rawPath } = job
   const { bucket, objectName } = splitStoragePath(rawPath)
+  const { ffmpegThreads } = config.worker
+  const { timestampSec, quality } = config.thumbnail
 
   const tmpInput = `/tmp/thumb-in-${videoId}-${Date.now()}.mp4`
   const tmpOutput = `/tmp/thumb-out-${videoId}-${Date.now()}.jpg`
@@ -30,20 +33,20 @@ export async function handleThumbnail(job: ThumbnailJob) {
     const parsed = parseFloat(probeOut.trim())
     const duration = !isNaN(parsed) && parsed > 0 ? parsed : null
 
-    // 3. Extract single frame at 1s
+    // 3. Extract single frame
     const proc = Bun.spawn([
       "ffmpeg",
       "-threads",
-      "1",
+      String(ffmpegThreads),
       "-y",
       "-ss",
-      "1",
+      String(timestampSec),
       "-i",
       tmpInput,
       "-frames:v",
       "1",
       "-q:v",
-      "2",
+      String(quality),
       tmpOutput,
     ])
     await proc.exited

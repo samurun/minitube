@@ -1,3 +1,4 @@
+import { config } from "@workspace/shared/config"
 import { initDatabase } from "@workspace/shared/database"
 import {
   connectRabbitMQ,
@@ -7,8 +8,6 @@ import {
 } from "@workspace/shared/rabbitmq"
 import { registerConsumer, updateVideoField } from "@workspace/worker-core"
 import { handleSeekingPreview } from "./handler"
-
-const MAX_RETRIES = 3
 
 interface PreviewResult {
   path: string
@@ -30,7 +29,7 @@ async function start() {
   registerConsumer<SeekingPreviewJob, PreviewResult>(ch, {
     queue: QUEUE.SEEKING_PREVIEW,
     label: "seeking-preview",
-    maxRetries: MAX_RETRIES,
+    maxRetries: config.worker.maxRetries,
     handle: handleSeekingPreview,
     onSuccess: async (job, result) => {
       await updateVideoField(job.videoId, {
@@ -61,5 +60,11 @@ const shutdown = async () => {
 }
 process.on("SIGINT", shutdown)
 process.on("SIGTERM", shutdown)
+process.on("uncaughtException", (err) => {
+  console.error("[preview] uncaughtException:", err)
+})
+process.on("unhandledRejection", (err) => {
+  console.error("[preview] unhandledRejection:", err)
+})
 
 start()

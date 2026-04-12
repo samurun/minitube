@@ -28,11 +28,16 @@ interface AppConfig {
     user: string
     pass: string
   }
-  preview: {
-    frameIntervalSeconds: number
-    columnsPerRow: number
-    tileWidth: number
-    tileHeight: number
+  upload: {
+    maxSizeMb: number
+  }
+  worker: {
+    maxRetries: number
+    ffmpegThreads: number
+  }
+  thumbnail: {
+    timestampSec: number
+    quality: number
   }
 }
 
@@ -125,22 +130,33 @@ export const config: AppConfig = {
     user: getEnv("RABBITMQ_USER", "admin"),
     pass: getEnv("RABBITMQ_PASS", "admin"),
   },
-  preview: {
-    frameIntervalSeconds: Math.max(
+  upload: {
+    maxSizeMb: Math.max(
       1,
-      parseInt(getEnv("PREVIEW_FRAME_INTERVAL_SECONDS", "1"), 10) || 1
+      parseInt(getEnv("UPLOAD_MAX_SIZE_MB", "1024"), 10) || 1024
     ),
-    columnsPerRow: Math.max(
+  },
+  worker: {
+    maxRetries: Math.max(
       1,
-      parseInt(getEnv("PREVIEW_COLUMNS_PER_ROW", "60"), 10) || 60
+      parseInt(getEnv("WORKER_MAX_RETRIES", "3"), 10) || 3
     ),
-    tileWidth: Math.max(
-      40,
-      parseInt(getEnv("PREVIEW_TILE_WIDTH", "160"), 10) || 160
+    ffmpegThreads: Math.max(
+      1,
+      parseInt(getEnv("FFMPEG_THREADS", "1"), 10) || 1
     ),
-    tileHeight: Math.max(
-      24,
-      parseInt(getEnv("PREVIEW_TILE_HEIGHT", "90"), 10) || 90
+  },
+  thumbnail: {
+    timestampSec: Math.max(
+      0,
+      parseInt(getEnv("THUMBNAIL_TIMESTAMP_SEC", "1"), 10) ?? 1
+    ),
+    quality: Math.max(
+      1,
+      Math.min(
+        31,
+        parseInt(getEnv("THUMBNAIL_QUALITY", "2"), 10) || 2
+      )
     ),
   },
 }

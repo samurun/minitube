@@ -1,3 +1,4 @@
+import { config } from "@workspace/shared/config"
 import { initDatabase } from "@workspace/shared/database"
 import {
   connectRabbitMQ,
@@ -7,8 +8,6 @@ import {
 } from "@workspace/shared/rabbitmq"
 import { registerConsumer, updateVideoField } from "@workspace/worker-core"
 import { handleThumbnail } from "./handler"
-
-const MAX_RETRIES = 3
 
 async function start() {
   console.log("Worker (thumbnail) starting...")
@@ -22,7 +21,7 @@ async function start() {
     {
       queue: QUEUE.THUMBNAIL,
       label: "thumbnail",
-      maxRetries: MAX_RETRIES,
+      maxRetries: config.worker.maxRetries,
       handle: handleThumbnail,
       onSuccess: async (job, result) => {
         await updateVideoField(job.videoId, {
@@ -49,5 +48,11 @@ const shutdown = async () => {
 }
 process.on("SIGINT", shutdown)
 process.on("SIGTERM", shutdown)
+process.on("uncaughtException", (err) => {
+  console.error("[thumbnail] uncaughtException:", err)
+})
+process.on("unhandledRejection", (err) => {
+  console.error("[thumbnail] unhandledRejection:", err)
+})
 
 start()
