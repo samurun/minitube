@@ -1,3 +1,5 @@
+import type { Readable } from "node:stream"
+
 import { Client } from "minio"
 import { config } from "../config"
 
@@ -73,6 +75,25 @@ export async function uploadToRawBucket(
     return `${config.minio.buckets.raw}/${objectName}`
   } catch (err) {
     console.error("Upload to raw bucket failed:", err)
+    throw err
+  }
+}
+
+export async function uploadStreamToRawBucket(
+  objectName: string,
+  stream: Readable,
+  size: number
+) {
+  try {
+    await minioClient.putObject(
+      config.minio.buckets.raw,
+      objectName,
+      stream,
+      size
+    )
+    return `${config.minio.buckets.raw}/${objectName}`
+  } catch (err) {
+    console.error("Upload stream to raw bucket failed:", err)
     throw err
   }
 }

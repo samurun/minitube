@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm"
+import { sql, eq, and } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
 
@@ -41,3 +41,5 @@ export async function initDatabase() {
 export async function closeDatabase() {
   await pool.end()
 }
+
+export { eq, and }

@@ -1,12 +1,12 @@
 {
-  "name": "worker",
+  "name": "worker-preview",
   "version": "1.0.0",
   "scripts": {
     "dev": "bun run --watch src/index.ts"
   },
   "dependencies": {
     "@workspace/shared": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "@workspace/worker-core": "workspace:*"
   },
   "devDependencies": {
     "bun-types": "latest"

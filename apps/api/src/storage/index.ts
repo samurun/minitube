@@ -2,6 +2,7 @@ export {
   minioClient,
   initStorage,
   uploadToRawBucket,
+  uploadStreamToRawBucket,
   deleteFromStorage,
   splitStoragePath,
   getPresignedReadUrl,

@@ -47,6 +47,9 @@ services:
       POSTGRES_HOST: ${POSTGRES_HOST}
     ports:
       - "4000:4000"
+    # Cap CPU so request handling (uploads especially) can't starve the host.
+    cpus: 1.5
+    mem_limit: 1g
     depends_on:
       - db
       - minio
@@ -86,14 +89,31 @@ services:
     depends_on:
       - api
 
-  worker:
+  worker-thumbnail:
     build:
       context: .
-      dockerfile: docker/worker.Dockerfile
-    container_name: worker
+      dockerfile: docker/worker-thumbnail.Dockerfile
+    container_name: worker-thumbnail
     restart: unless-stopped
     env_file:
       - ./.env
+    cpus: 0.5
+    mem_limit: 512m
+    depends_on:
+      - db
+      - minio
+      - rabbitmq
+
+  worker-preview:
+    build:
+      context: .
+      dockerfile: docker/worker-preview.Dockerfile
+    container_name: worker-preview
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    cpus: 1.5
+    mem_limit: 1g
     depends_on:
       - db
       - minio
