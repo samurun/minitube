@@ -50,6 +50,12 @@ services:
     # Cap CPU so request handling (uploads especially) can't starve the host.
     cpus: 1.5
     mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       db:
         condition: service_started
@@ -95,7 +101,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   worker-thumbnail:
     build:

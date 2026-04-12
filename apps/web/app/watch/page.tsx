@@ -1,4 +1,4 @@
-import { Player } from "@/components/player"
+import { LazyPlayer } from "@/components/player/lazy-player"
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
@@ -69,7 +69,7 @@ export default async function Page({ searchParams }: PageProps) {
     return (
       <div className="flex flex-col gap-4 px-4 py-6 lg:flex-row">
         <div className="col-span-3 flex w-full flex-col gap-2">
-          <Player
+          <LazyPlayer
             videoUrl={videoUrl ?? ""}
             hlsUrl={hlsUrl}
             duration={res.video.duration ?? 0}

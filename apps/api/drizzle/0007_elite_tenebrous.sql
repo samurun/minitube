@@ -1,0 +1,1 @@
+CREATE INDEX "idx_videos_created_at" ON "videos" USING btree ("created_at" desc);

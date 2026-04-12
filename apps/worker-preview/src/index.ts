@@ -6,7 +6,11 @@ import {
   QUEUE,
   type SeekingPreviewJob,
 } from "@workspace/shared/rabbitmq"
-import { registerConsumer, updateVideoField } from "@workspace/worker-core"
+import {
+  registerConsumer,
+  updateVideoField,
+  type ConsumerHandle,
+} from "@workspace/worker-core"
 import { handleSeekingPreview } from "./handler"
 
 interface PreviewResult {
@@ -19,6 +23,8 @@ interface PreviewResult {
   tileHeight: number
 }
 
+let consumer: ConsumerHandle
+
 async function start() {
   console.log("Worker (preview) starting...")
   await initDatabase()
@@ -26,7 +32,7 @@ async function start() {
 
   await ch.prefetch(1)
 
-  registerConsumer<SeekingPreviewJob, PreviewResult>(ch, {
+  consumer = registerConsumer<SeekingPreviewJob, PreviewResult>(ch, {
     queue: QUEUE.SEEKING_PREVIEW,
     label: "seeking-preview",
     maxRetries: config.worker.maxRetries,
@@ -54,7 +60,8 @@ async function start() {
 }
 
 const shutdown = async () => {
-  console.log("\nWorker (preview) shutting down...")
+  console.log("\nWorker (preview) shutting down — draining in-flight job...")
+  await consumer?.drain()
   await closeRabbitMQ()
   process.exit(0)
 }

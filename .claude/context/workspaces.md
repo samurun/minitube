@@ -28,8 +28,8 @@ minitube/
 | [apps/worker-thumbnail](../../apps/worker-thumbnail) | Bun + FFmpeg, thumbnail extraction (Alpine image) |
 | [apps/worker-preview](../../apps/worker-preview) | Bun + FFmpeg, sprite-sheet seeking preview (Debian image) |
 | [apps/worker-transcode](../../apps/worker-transcode) | Bun + FFmpeg, multi-variant HLS transcode (Debian image) |
-| [packages/shared](../../packages/shared) | Shared config, Drizzle ORM database, MinIO storage, RabbitMQ |
-| [packages/worker-core](../../packages/worker-core) | Generic consumer wrapper, retry/ack, race-safe video status updates |
+| [packages/shared](../../packages/shared) | Shared config, Drizzle ORM database, MinIO storage, RabbitMQ, structured logger |
+| [packages/worker-core](../../packages/worker-core) | Generic consumer wrapper, retry/ack with exponential backoff, graceful drain, race-safe video status updates, `probeVideo`/`probeDuration`, `runFFmpeg` |
 | [packages/ui](../../packages/ui) | Shared shadcn/ui component library (Radix UI primitives) |
 | [packages/eslint-config](../../packages/eslint-config) | Shared ESLint configs |
 | [packages/typescript-config](../../packages/typescript-config) | Shared tsconfig |
@@ -73,7 +73,8 @@ Current modules: `health`, `upload`, `videos`.
   - `@workspace/shared/database`
   - `@workspace/shared/storage`
   - `@workspace/shared/rabbitmq`
-  - `@workspace/worker-core` (consumer, video-state — workers only)
+  - `@workspace/shared/logger`
+  - `@workspace/worker-core` (consumer, video-state, probe, ffmpeg — workers only)
 
 ## Config & environment
 

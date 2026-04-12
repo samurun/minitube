@@ -2,38 +2,8 @@ import { config } from "@workspace/shared/config"
 import { minioClient } from "@workspace/shared/storage"
 import { splitStoragePath } from "@workspace/shared/storage"
 import type { SeekingPreviewJob } from "@workspace/shared/rabbitmq"
+import { probeVideo } from "@workspace/worker-core"
 import { mkdir, readdir, rm, unlink } from "node:fs/promises"
-
-interface VideoMeta {
-  duration: number
-  width: number
-  height: number
-}
-
-async function probeVideo(filePath: string): Promise<VideoMeta> {
-  const proc = Bun.spawn([
-    "ffprobe",
-    "-v",
-    "error",
-    "-select_streams",
-    "v:0",
-    "-show_entries",
-    "stream=width,height:format=duration",
-    "-of",
-    "csv=p=0",
-    filePath,
-  ])
-  const output = await new Response(proc.stdout).text()
-  await proc.exited
-  // csv format outputs two lines: "width,height" then "duration"
-  const lines = output.trim().split("\n")
-  const [w, h] = (lines[0] ?? "").split(",").map(Number)
-  const duration = parseFloat(lines[1] ?? "")
-  if (!w || !h || isNaN(duration) || duration <= 0) {
-    throw new Error(`Could not probe video metadata`)
-  }
-  return { duration, width: w, height: h }
-}
 
 // Pick a frame interval based on video duration so sprite sheet size stays
 // reasonable for long videos while short clips keep fine-grained previews.

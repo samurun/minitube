@@ -8,9 +8,16 @@
     "dev": "turbo dev",
     "dev:api": "turbo dev --filter=api",
     "dev:web": "turbo dev --filter=web",
+    "dev:workers": "turbo dev --filter=worker-thumbnail --filter=worker-preview --filter=worker-transcode",
+    "dev:all": "turbo dev --filter=api --filter=web --filter=worker-thumbnail --filter=worker-preview --filter=worker-transcode",
     "lint": "turbo lint",
     "format": "turbo format",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "db:push": "cd apps/api && bunx drizzle-kit push",
+    "db:generate": "cd apps/api && bunx drizzle-kit generate",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:infra": "docker compose up -d db minio rabbitmq"
   },
   "devDependencies": {
     "@workspace/eslint-config": "workspace:*",

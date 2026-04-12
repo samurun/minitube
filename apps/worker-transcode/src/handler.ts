@@ -1,46 +1,14 @@
 import { config } from "@workspace/shared/config"
 import { minioClient, splitStoragePath } from "@workspace/shared/storage"
 import type { TranscodeJob } from "@workspace/shared/rabbitmq"
+import { probeVideo } from "@workspace/worker-core"
 import { mkdir, readdir, rm, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import { filterPresets, type TranscodePreset } from "./presets"
 
-interface VideoMeta {
-  duration: number
-  width: number
-  height: number
-}
-
 export interface TranscodeResult {
   hlsPath: string
   variants: { name: string; width: number; height: number; bitrate: number }[]
-}
-
-async function probeVideo(filePath: string): Promise<VideoMeta> {
-  const proc = Bun.spawn(
-    [
-      "ffprobe",
-      "-v",
-      "error",
-      "-select_streams",
-      "v:0",
-      "-show_entries",
-      "stream=width,height:format=duration",
-      "-of",
-      "csv=p=0",
-      filePath,
-    ],
-    { stdout: "pipe", stderr: "pipe" }
-  )
-  const output = await new Response(proc.stdout).text()
-  await proc.exited
-  const lines = output.trim().split("\n")
-  const [w, h] = (lines[0] ?? "").split(",").map(Number)
-  const duration = parseFloat(lines[1] ?? "")
-  if (!w || !h || isNaN(duration) || duration <= 0) {
-    throw new Error("Could not probe video metadata")
-  }
-  return { duration, width: w, height: h }
 }
 
 function buildFfmpegArgs(
