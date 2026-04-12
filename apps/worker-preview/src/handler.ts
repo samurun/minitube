@@ -1,3 +1,4 @@
+import { config } from "@workspace/shared/config"
 import { minioClient } from "@workspace/shared/storage"
 import { splitStoragePath } from "@workspace/shared/storage"
 import type { SeekingPreviewJob } from "@workspace/shared/rabbitmq"
@@ -49,10 +50,18 @@ function pickInterval(duration: number, minInterval: number): number {
   return Math.max(minInterval, tier[1])
 }
 
+const COLUMNS_PER_ROW = 10
+const TILE_WIDTH = 160
+const MIN_INTERVAL_SEC = 1
+const JPEG_QUALITY = 10
+
 export async function handleSeekingPreview(job: SeekingPreviewJob) {
-  const { videoId, rawPath, columnsPerRow, tileWidth: maxTileWidth } = job
-  const minInterval = job.frameIntervalSeconds
+  const { videoId, rawPath } = job
   const { bucket, objectName } = splitStoragePath(rawPath)
+  const columnsPerRow = COLUMNS_PER_ROW
+  const maxTileWidth = TILE_WIDTH
+  const threads = String(config.worker.ffmpegThreads)
+  const quality = String(JPEG_QUALITY)
 
   const stamp = Date.now()
   const tmpInput = `/tmp/preview-in-${videoId}-${stamp}.mp4`
@@ -76,7 +85,7 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
     //    source aspect ratio so the sprite preview matches real video shape
     //    (instead of being stretched to a hardcoded 16:9 box).
     const { duration, width: srcW, height: srcH } = await probeVideo(tmpInput)
-    const interval = pickInterval(duration, minInterval)
+    const interval = pickInterval(duration, MIN_INTERVAL_SEC)
     const totalFrames = Math.max(1, Math.ceil(duration / interval))
     const rows = Math.max(1, Math.ceil(totalFrames / columnsPerRow))
 
@@ -107,14 +116,14 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
       [
         "ffmpeg",
         "-threads",
-        "1",
+        threads,
         "-y",
         "-i",
         tmpInput,
         "-vf",
         `fps=1/${interval},scale=${tileWidth}:${tileHeight}`,
         "-q:v",
-        "10",
+        quality,
         `${tmpFramesDir}/f%04d.jpg`,
       ],
       { stdout: "pipe", stderr: "pipe" }
@@ -153,7 +162,7 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
       [
         "ffmpeg",
         "-threads",
-        "1",
+        threads,
         "-y",
         "-framerate",
         "1",
@@ -164,7 +173,7 @@ export async function handleSeekingPreview(job: SeekingPreviewJob) {
         "-frames:v",
         "1",
         "-q:v",
-        "10",
+        quality,
         tmpOutput,
       ],
       { stdout: "pipe", stderr: "pipe" }

@@ -16,10 +16,6 @@ export interface ThumbnailJob {
 export interface SeekingPreviewJob {
   videoId: number
   rawPath: string
-  frameIntervalSeconds: number
-  columnsPerRow: number
-  tileWidth: number
-  tileHeight: number
   attempt: number
 }
 

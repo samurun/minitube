@@ -74,7 +74,6 @@ export const uploadService = {
     publishJob(QUEUE.SEEKING_PREVIEW, {
       videoId: video.id,
       rawPath: video.rawPath,
-      ...config.preview,
       attempt: 0,
     })
 
