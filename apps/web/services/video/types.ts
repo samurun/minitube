@@ -18,7 +18,7 @@ export interface Video {
 export interface VideosResponse {
   message: string
   preview: {
-    frameIntervalSeconds: number
+    frameIntervalSeconds?: number
     columnsPerRow: number
     tileWidth: number
     tileHeight: number

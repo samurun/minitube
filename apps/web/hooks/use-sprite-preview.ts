@@ -24,7 +24,7 @@ export function useSpritePreview(
     // matches the sprite even if the browser duration drifts from ffprobe.
     const totalFrames =
       previewConfig.totalFrames ??
-      (duration > 0 ? Math.floor(duration / frameIntervalSeconds) : 0)
+      (duration > 0 ? Math.floor(duration / (frameIntervalSeconds || 0)) : 0)
     const totalRows = Math.ceil(totalFrames / columnsPerRow) || 1
 
     function getStyleAt(percent: number): React.CSSProperties {

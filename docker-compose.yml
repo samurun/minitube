@@ -51,9 +51,12 @@ services:
     cpus: 1.5
     mem_limit: 1g
     depends_on:
-      - db
-      - minio
-      - rabbitmq
+      db:
+        condition: service_started
+      minio:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -70,6 +73,11 @@ services:
       - "15692:15692"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 10s
+      retries: 10
     command: >
       sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus &&
              docker-entrypoint.sh rabbitmq-server"
@@ -100,9 +108,12 @@ services:
     cpus: 0.5
     mem_limit: 512m
     depends_on:
-      - db
-      - minio
-      - rabbitmq
+      db:
+        condition: service_started
+      minio:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   worker-preview:
     build:
@@ -115,9 +126,30 @@ services:
     cpus: 1.5
     mem_limit: 1g
     depends_on:
-      - db
-      - minio
-      - rabbitmq
+      db:
+        condition: service_started
+      minio:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  worker-transcode:
+    build:
+      context: .
+      dockerfile: docker/worker-transcode.Dockerfile
+    container_name: worker-transcode
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    cpus: 2.0
+    mem_limit: 2g
+    depends_on:
+      db:
+        condition: service_started
+      minio:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:latest

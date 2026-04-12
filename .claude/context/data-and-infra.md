@@ -11,6 +11,8 @@ Two buckets:
 - `processed/`
   - `thumbnails/{videoId}.jpg`
   - `seeking-previews/{videoId}.jpg` (sprite sheet)
+  - `hls/{videoId}/` — adaptive bitrate HLS output (master.m3u8 + per-variant
+    playlists and .ts segments)
 
 Helpers in
 [packages/shared/src/storage/index.ts](../../packages/shared/src/storage/index.ts)
@@ -31,9 +33,10 @@ Single `videos` table. Schema lives at
 
 Columns of note:
 
-- `rawPath`, `thumbnailPath`, `seekingPreviewPath` — MinIO storage paths
-- `status` — `pending` | `completed` | `failed`
-- `errorMessage` — populated on terminal failure (after retry budget)
+- `rawPath`, `thumbnailPath`, `seekingPreviewPath`, `hlsPath` — MinIO storage paths
+- `status` — `pending` | `completed` | `failed` (requires all 3 jobs: thumbnail + preview + transcode)
+- `thumbnailErrorMessage`, `seekingPreviewErrorMessage`, `hlsErrorMessage` — populated on terminal failure
+- `hlsVariants` — JSON text of available quality variants (e.g. `[{"name":"720p","width":1280,"height":720,"bitrate":2800000}]`)
 - Sprite-sheet metadata (persisted so the player doesn't re-probe):
   - `seekingPreviewInterval`
   - `seekingPreviewColumns`
@@ -53,14 +56,15 @@ bunx drizzle-kit push        # apply schema changes to the DB
 ## Docker Compose
 
 [docker-compose.yml](../../docker-compose.yml) runs everything: `db`, `minio`,
-`rabbitmq`, `api`, `worker-thumbnail`, `worker-preview`, `web`, `prometheus`,
-`grafana`, `node-exporter`, `postgres-exporter`.
+`rabbitmq`, `api`, `worker-thumbnail`, `worker-preview`, `worker-transcode`,
+`web`, `prometheus`, `grafana`, `node-exporter`, `postgres-exporter`.
 
 Resource caps per service:
 
 - `api`: `cpus: 1.5`, `mem_limit: 1g`
 - `worker-thumbnail`: `cpus: 0.5`, `mem_limit: 512m` (lightweight, single frame extraction)
 - `worker-preview`: `cpus: 1.5`, `mem_limit: 1g` (CPU-intensive sprite generation)
+- `worker-transcode`: `cpus: 2.0`, `mem_limit: 2g` (CPU-intensive multi-variant HLS encoding)
 
 Each worker has its own Dockerfile:
 
@@ -69,6 +73,8 @@ Each worker has its own Dockerfile:
 - [docker/worker-preview.Dockerfile](../../docker/worker-preview.Dockerfile) —
   `oven/bun:1` (Debian) + ffmpeg + coreutils. Needs glibc for `stdbuf` to
   line-buffer FFmpeg stderr for real-time progress logging.
+- [docker/worker-transcode.Dockerfile](../../docker/worker-transcode.Dockerfile) —
+  `oven/bun:1` (Debian) + ffmpeg + coreutils. Same base as preview worker.
 
 ## RabbitMQ
 

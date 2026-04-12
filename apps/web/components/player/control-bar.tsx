@@ -9,6 +9,8 @@ import {
   Volume2Icon,
   VolumeXIcon,
 } from "lucide-react"
+import { QualitySelector } from "./quality-selector"
+import type { QualityLevel } from "@/hooks/use-hls"
 
 export function ControlBar({
   isPlaying,
@@ -20,6 +22,9 @@ export function ControlBar({
   onToggleMute,
   onToggleFullscreen,
   onChangeVolume,
+  qualityLevels,
+  currentQuality,
+  onSelectQuality,
 }: {
   isPlaying: boolean
   volume: number
@@ -30,6 +35,9 @@ export function ControlBar({
   onToggleMute: () => void
   onToggleFullscreen: () => void
   onChangeVolume: (values: number[]) => void
+  qualityLevels?: QualityLevel[]
+  currentQuality?: number
+  onSelectQuality?: (index: number) => void
 }) {
   return (
     <div className="flex items-center justify-between gap-3 text-white">
@@ -83,20 +91,30 @@ export function ControlBar({
         </div>
       </div>
 
-      <Button
-        type="button"
-        size="icon-lg"
-        variant="ghost"
-        onClick={onToggleFullscreen}
-        aria-label="Toggle fullscreen"
-        className="rounded-full bg-black/20 hover:bg-black/30"
-      >
-        {isFullscreen ? (
-          <MinimizeIcon className="size-4" />
-        ) : (
-          <MaximizeIcon className="size-4" />
+      <div className="flex items-center gap-1.5">
+        {qualityLevels && qualityLevels.length > 0 && onSelectQuality && (
+          <QualitySelector
+            levels={qualityLevels}
+            currentLevel={currentQuality ?? -1}
+            onSelect={onSelectQuality}
+          />
         )}
-      </Button>
+
+        <Button
+          type="button"
+          size="icon-lg"
+          variant="ghost"
+          onClick={onToggleFullscreen}
+          aria-label="Toggle fullscreen"
+          className="rounded-full bg-black/20 hover:bg-black/30"
+        >
+          {isFullscreen ? (
+            <MinimizeIcon className="size-4" />
+          ) : (
+            <MaximizeIcon className="size-4" />
+          )}
+        </Button>
+      </div>
     </div>
   )
 }

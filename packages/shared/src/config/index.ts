@@ -39,6 +39,10 @@ interface AppConfig {
     timestampSec: number
     quality: number
   }
+  transcode: {
+    ffmpegThreads: number
+    hlsSegmentDuration: number
+  }
 }
 
 // Detect if running in Docker by checking for the presence of /.dockerenv
@@ -157,6 +161,16 @@ export const config: AppConfig = {
         31,
         parseInt(getEnv("THUMBNAIL_QUALITY", "2"), 10) || 2
       )
+    ),
+  },
+  transcode: {
+    ffmpegThreads: Math.max(
+      1,
+      parseInt(getEnv("TRANSCODE_FFMPEG_THREADS", "2"), 10) || 2
+    ),
+    hlsSegmentDuration: Math.max(
+      2,
+      parseInt(getEnv("HLS_SEGMENT_DURATION", "6"), 10) || 6
     ),
   },
 }

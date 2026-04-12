@@ -2,7 +2,30 @@ import Elysia from "elysia"
 import { videoService } from "./service"
 import { videoModels } from "./model"
 
-export const videoRoute = new Elysia({ prefix: "/videos" })
+// HLS route is separate to avoid videoIdParams (additionalProperties: false)
+// rejecting the wildcard `*` param
+const hlsRoute = new Elysia({ prefix: "/videos" }).get(
+  "/:id/hls/*",
+  async ({ params, set }) => {
+    const p = params as unknown as Record<string, string>
+    const id = Number(p.id)
+    const hlsSubPath = p["*"]
+    if (!id || !hlsSubPath) {
+      set.status = 400
+      return { error: "Invalid request" }
+    }
+    const result = await videoService.streamHls(id, hlsSubPath)
+    for (const [key, value] of Object.entries(result.headers)) {
+      set.headers[key] = value
+    }
+    return result.body
+  },
+  {
+    tags: ["Video"],
+  }
+)
+
+const videoRoute = new Elysia({ prefix: "/videos" })
   .get(
     "",
     async ({ query }) =>
@@ -52,3 +75,5 @@ export const videoRoute = new Elysia({ prefix: "/videos" })
       params: videoModels.videoIdParams,
     }
   )
+
+export { videoRoute, hlsRoute }

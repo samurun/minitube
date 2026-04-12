@@ -3,12 +3,13 @@
 import { cn } from "@workspace/ui/lib/utils"
 import { useVideoPlayer } from "@/hooks/use-player"
 import { useAutoHideControls } from "@/hooks/use-auto-hide-controls"
+import { useHls } from "@/hooks/use-hls"
 import { PlayOverlay } from "./play-overlay"
 import { ProgressBar } from "./progress-bar"
 import { ControlBar } from "./control-bar"
 
 export interface PreviewConfig {
-  frameIntervalSeconds: number
+  frameIntervalSeconds?: number
   columnsPerRow: number
   tileWidth: number
   tileHeight: number
@@ -19,6 +20,7 @@ export interface PreviewConfig {
 
 interface PlayerProps {
   videoUrl: string
+  hlsUrl?: string | null
   thumbnailUrl: string | null
   duration?: number
   seekingPreviewUrl: string
@@ -27,15 +29,18 @@ interface PlayerProps {
 
 export function Player({
   videoUrl,
+  hlsUrl,
   thumbnailUrl,
   duration: durationHint,
   seekingPreviewUrl,
   previewConfig,
 }: PlayerProps) {
   const { refs, state, actions, videoEvents } = useVideoPlayer(durationHint)
+  const hls = useHls(refs.video, hlsUrl ?? null)
   const controls = useAutoHideControls({ active: state.isPlaying })
 
-  const controlsVisible = !state.isPlaying || controls.visible || state.isUserSeeking
+  const controlsVisible =
+    !state.isPlaying || controls.visible || state.isUserSeeking
 
   return (
     <div
@@ -47,7 +52,7 @@ export function Player({
     >
       <video
         ref={refs.video}
-        src={videoUrl}
+        src={hlsUrl ? undefined : videoUrl}
         poster={thumbnailUrl ?? "/placeholder.svg"}
         preload="metadata"
         playsInline
@@ -95,6 +100,9 @@ export function Player({
             onToggleMute={actions.toggleMute}
             onToggleFullscreen={actions.toggleFullscreen}
             onChangeVolume={actions.changeVolume}
+            qualityLevels={hls.levels}
+            currentQuality={hls.currentLevel}
+            onSelectQuality={hls.setLevel}
           />
         </div>
       </div>

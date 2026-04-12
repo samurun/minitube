@@ -77,6 +77,12 @@ export const uploadService = {
       attempt: 0,
     })
 
+    publishJob(QUEUE.TRANSCODE, {
+      videoId: video.id,
+      rawPath: video.rawPath,
+      attempt: 0,
+    })
+
     return { message: "Video uploaded successfully", video }
   },
 }

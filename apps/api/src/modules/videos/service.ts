@@ -9,6 +9,8 @@ import {
   deleteFromStorage,
   getObjectRange,
   getPresignedReadUrl,
+  minioClient,
+  splitStoragePath,
   statObject,
 } from "../../storage"
 import { config } from "../../config"
@@ -30,6 +32,8 @@ interface VideoResponse {
   seekingPreviewTotalFrames: number | null
   seekingPreviewTileWidth: number | null
   seekingPreviewTileHeight: number | null
+  hlsUrl: string | null
+  hlsVariants: object[] | null
 }
 
 async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
@@ -43,6 +47,12 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
         : null,
     ])
     const videoUrl = `/videos/${video.id}/stream`
+    const hlsUrl = video.hlsPath
+      ? `/videos/${video.id}/hls/master.m3u8`
+      : null
+    const hlsVariants = video.hlsVariants
+      ? (JSON.parse(video.hlsVariants) as object[])
+      : null
 
     return {
       id: video.id,
@@ -59,6 +69,8 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       seekingPreviewTotalFrames: video.seekingPreviewTotalFrames,
       seekingPreviewTileWidth: video.seekingPreviewTileWidth,
       seekingPreviewTileHeight: video.seekingPreviewTileHeight,
+      hlsUrl,
+      hlsVariants,
     }
   } catch (err) {
     console.error(
@@ -80,6 +92,8 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       seekingPreviewTotalFrames: video.seekingPreviewTotalFrames,
       seekingPreviewTileWidth: video.seekingPreviewTileWidth,
       seekingPreviewTileHeight: video.seekingPreviewTileHeight,
+      hlsUrl: null,
+      hlsVariants: null,
     }
   }
 }
@@ -197,6 +211,46 @@ export const videoService = {
     }
   },
 
+  streamHls: async (
+    id: number,
+    hlsSubPath: string
+  ): Promise<{
+    body: ReadableStream
+    headers: Record<string, string>
+  }> => {
+    const [video] = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, id))
+      .limit(1)
+
+    if (!video || !video.hlsPath) {
+      throw new NotFoundError("HLS content not found")
+    }
+
+    const basePath = video.hlsPath.replace(/master\.m3u8$/, "")
+    const objectPath = basePath + hlsSubPath
+
+    const contentType = hlsSubPath.endsWith(".m3u8")
+      ? "application/vnd.apple.mpegurl"
+      : hlsSubPath.endsWith(".ts")
+        ? "video/MP2T"
+        : "application/octet-stream"
+
+    const { bucket, objectName } = splitStoragePath(objectPath)
+    const stat = await minioClient.statObject(bucket, objectName)
+    const stream = await minioClient.getObject(bucket, objectName)
+
+    return {
+      body: Readable.toWeb(stream) as unknown as ReadableStream,
+      headers: {
+        "content-type": contentType,
+        "content-length": String(stat.size),
+        "cache-control": "public, max-age=31536000",
+      },
+    }
+  },
+
   deleteVideo: async (id: number) => {
     // Delete from DB first to avoid dangling records pointing to deleted files
     const [deletedVideo] = await db
@@ -228,6 +282,27 @@ export const videoService = {
         }
       })
     })
+
+    // Clean up HLS directory (multiple objects under a prefix)
+    if (deletedVideo.hlsPath) {
+      try {
+        const hlsBase = deletedVideo.hlsPath.replace(/master\.m3u8$/, "")
+        const { bucket, objectName: prefix } = splitStoragePath(hlsBase)
+        const objectsList = minioClient.listObjects(bucket, prefix, true)
+        const objectsToDelete: string[] = []
+        for await (const obj of objectsList) {
+          objectsToDelete.push(obj.name)
+        }
+        await Promise.allSettled(
+          objectsToDelete.map((name) => minioClient.removeObject(bucket, name))
+        )
+      } catch (err) {
+        console.error(
+          `Failed to delete HLS objects for video ${id}:`,
+          err
+        )
+      }
+    }
 
     return { message: "Video deleted successfully" }
   },

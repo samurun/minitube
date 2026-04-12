@@ -5,6 +5,7 @@ import { config } from "../config"
 export const QUEUE = {
   THUMBNAIL: "video.thumbnail",
   SEEKING_PREVIEW: "video.seeking-preview",
+  TRANSCODE: "video.transcode",
 } as const
 
 export interface ThumbnailJob {
@@ -14,6 +15,12 @@ export interface ThumbnailJob {
 }
 
 export interface SeekingPreviewJob {
+  videoId: number
+  rawPath: string
+  attempt: number
+}
+
+export interface TranscodeJob {
   videoId: number
   rawPath: string
   attempt: number
@@ -35,6 +42,7 @@ export async function connectRabbitMQ(): Promise<Channel> {
   // Assert queues so they exist before publishing/consuming
   await channel.assertQueue(QUEUE.THUMBNAIL, { durable: true })
   await channel.assertQueue(QUEUE.SEEKING_PREVIEW, { durable: true })
+  await channel.assertQueue(QUEUE.TRANSCODE, { durable: true })
 
   console.log("✓ RabbitMQ connected")
   return channel
@@ -54,7 +62,7 @@ export async function closeRabbitMQ(): Promise<void> {
 
 export function publishJob(
   queue: string,
-  job: ThumbnailJob | SeekingPreviewJob
+  job: ThumbnailJob | SeekingPreviewJob | TranscodeJob
 ) {
   const ch = getChannel()
   ch.sendToQueue(queue, Buffer.from(JSON.stringify(job)), { persistent: true })
