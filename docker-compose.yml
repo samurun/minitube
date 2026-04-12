@@ -98,7 +98,7 @@ services:
     env_file:
       - ./.env
     cpus: 0.5
-    mem_limit: 256m
+    mem_limit: 512m
     depends_on:
       - db
       - minio
