@@ -33,9 +33,17 @@ the repo.
 - **Video uploads must stream** — use `uploadStreamToRawBucket`, never buffer
   the full file in the API. See
   [.claude/context/data-and-infra.md](./data-and-infra.md) for the rationale.
-- **FFmpeg in workers runs with `-threads 1`** and each worker process has
-  `ch.prefetch(1)`. Resource isolation is via Docker `cpus`/`mem_limit` per
-  service. See [.claude/context/architecture.md](./architecture.md#worker-flow).
+- **FFmpeg threads and worker retries are env-configurable** —
+  `FFMPEG_THREADS` (default 1), `WORKER_MAX_RETRIES` (default 3).
+  Each worker process has `ch.prefetch(1)`. Resource isolation is via
+  Docker `cpus`/`mem_limit` per service.
+- **Preview sprite config is NOT in .env** — tile width, columns, interval,
+  and quality are constants in
+  [apps/worker-preview/src/handler.ts](../../apps/worker-preview/src/handler.ts)
+  because they're computed from the video or are implementation details.
+- **Thumbnail config IS in .env** — `THUMBNAIL_TIMESTAMP_SEC` (default 1),
+  `THUMBNAIL_QUALITY` (default 2, JPEG 1-31 scale).
+- **Upload max size is in .env** — `UPLOAD_MAX_SIZE_MB` (default 1024 = 1GB).
 
 ## Adding shadcn/ui components
 

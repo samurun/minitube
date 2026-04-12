@@ -59,7 +59,7 @@ bunx drizzle-kit push        # apply schema changes to the DB
 Resource caps per service:
 
 - `api`: `cpus: 1.5`, `mem_limit: 1g`
-- `worker-thumbnail`: `cpus: 0.5`, `mem_limit: 256m` (lightweight, single frame extraction)
+- `worker-thumbnail`: `cpus: 0.5`, `mem_limit: 512m` (lightweight, single frame extraction)
 - `worker-preview`: `cpus: 1.5`, `mem_limit: 1g` (CPU-intensive sprite generation)
 
 Each worker has its own Dockerfile:
