@@ -1,5 +1,8 @@
 import { db, eq, and } from "@workspace/shared/database"
 import { videos } from "@workspace/shared/database/schema"
+import { createLogger } from "@workspace/shared/logger"
+
+const logger = createLogger("worker-core.video-state")
 
 type VideoUpdate = Partial<{
   thumbnailPath: string | null
@@ -53,7 +56,7 @@ export async function updateVideoField(
       .returning({ id: videos.id })
 
     if (updated) {
-      console.log(`[video:${videoId}] final status: ${finalStatus}`)
+      logger.info("video final status", { videoId, status: finalStatus })
     }
   }
 }
