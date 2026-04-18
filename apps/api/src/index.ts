@@ -8,24 +8,21 @@ import { connectRabbitMQ, closeRabbitMQ } from "@workspace/shared/rabbitmq"
 import { healthRoute } from "./modules/health"
 import { uploadRoute } from "./modules/upload"
 import { videoRoute, hlsRoute } from "./modules/videos"
+import { errorHandler } from "./shared/error-handler"
+import { logger } from "./shared/logger"
 
 const app = new Elysia()
-  // Enable CORS for configured origins
+  .use(errorHandler)
   .use(cors({ origin: config.corsOrigins }))
-
-  // OpenAPI documentation
   .use(openapi())
-
-  // Import routes
   .use(healthRoute)
   .use(uploadRoute)
   .use(hlsRoute)
   .use(videoRoute)
 
-// Initialize services
 async function start() {
   try {
-    console.log("🚀 Initializing services...")
+    logger.info("initializing services")
     await initDatabase()
     await initStorage()
     await connectRabbitMQ()
@@ -35,36 +32,30 @@ async function start() {
       hostname: "0.0.0.0",
       maxRequestBodySize: config.upload.maxSizeMb * 1024 * 1024,
     })
-    console.log(`🦊 Elysia is running at http://localhost:${config.port}`)
-  } catch (error) {
-    console.error("Failed to start server:", error)
+    logger.info("API server started", { port: config.port })
+  } catch (err) {
+    logger.error("failed to start server", {
+      err: err instanceof Error ? err.message : String(err),
+    })
     process.exit(1)
   }
 }
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("\n🛑 Shutting down gracefully...")
+async function shutdown(signal: string) {
+  logger.info("shutting down", { signal })
   try {
     await closeRabbitMQ()
     await closeDatabase()
-    console.log("✓ Connections closed")
-  } catch (error) {
-    console.error("Error during shutdown:", error)
+    logger.info("connections closed")
+  } catch (err) {
+    logger.error("error during shutdown", {
+      err: err instanceof Error ? err.message : String(err),
+    })
   }
   process.exit(0)
-})
+}
 
-process.on("SIGTERM", async () => {
-  console.log("\n🛑 Shutting down gracefully...")
-  try {
-    await closeRabbitMQ()
-    await closeDatabase()
-    console.log("✓ Connections closed")
-  } catch (error) {
-    console.error("Error during shutdown:", error)
-  }
-  process.exit(0)
-})
+process.on("SIGINT", () => shutdown("SIGINT"))
+process.on("SIGTERM", () => shutdown("SIGTERM"))
 
 start()

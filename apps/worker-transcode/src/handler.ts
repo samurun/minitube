@@ -1,8 +1,14 @@
 import { config } from "@workspace/shared/config"
+import type { Logger } from "@workspace/shared/logger"
 import { minioClient, splitStoragePath } from "@workspace/shared/storage"
 import type { TranscodeJob } from "@workspace/shared/rabbitmq"
-import { probeVideo } from "@workspace/worker-core"
-import { mkdir, readdir, rm, unlink } from "node:fs/promises"
+import {
+  createFFmpegProgressTracker,
+  probeVideo,
+  runFFmpeg,
+  withTempDir,
+} from "@workspace/worker-core"
+import { mkdir, readdir } from "node:fs/promises"
 import { join } from "node:path"
 import { filterPresets, type TranscodePreset } from "./presets"
 
@@ -150,45 +156,36 @@ async function uploadDirectory(
 }
 
 export async function handleTranscode(
-  job: TranscodeJob
+  job: TranscodeJob,
+  ctx: { logger: Logger }
 ): Promise<TranscodeResult> {
   const { videoId, rawPath } = job
   const { bucket, objectName } = splitStoragePath(rawPath)
   const threads = config.transcode.ffmpegThreads
   const segmentDuration = config.transcode.hlsSegmentDuration
+  const { logger } = ctx
 
-  const stamp = Date.now()
-  const tmpInput = `/tmp/transcode-in-${videoId}-${stamp}.mp4`
-  const tmpOutputDir = `/tmp/transcode-out-${videoId}-${stamp}`
+  return withTempDir(`transcode-${videoId}`, async (dir) => {
+    const tmpInput = join(dir, "input.mp4")
+    const tmpOutputDir = join(dir, "out")
 
-  const log = (stage: string, extra = "") =>
-    console.log(
-      `[transcode] video:${videoId} ${stage}${extra ? " " + extra : ""}`
-    )
-  const t0 = Date.now()
-  const elapsed = () => `(${((Date.now() - t0) / 1000).toFixed(1)}s)`
-
-  try {
-    // 1. Download raw video
-    log("download:start")
+    logger.info("download:start")
     await minioClient.fGetObject(bucket, objectName, tmpInput)
-    log("download:done", elapsed())
 
-    // 2. Probe source resolution
     const { duration, width: srcW, height: srcH } = await probeVideo(tmpInput)
     const presets = filterPresets(srcW, srcH)
-    log(
-      "probe:done",
-      `${srcW}x${srcH} duration=${duration.toFixed(1)}s variants=${presets.map((p) => p.name).join(",")}`
-    )
+    logger.info("probe:done", {
+      srcW,
+      srcH,
+      duration,
+      variants: presets.map((p) => p.name),
+    })
 
-    // 3. Create output directories for each variant
     await mkdir(tmpOutputDir, { recursive: true })
     for (const preset of presets) {
       await mkdir(join(tmpOutputDir, preset.name), { recursive: true })
     }
 
-    // 4. Run FFmpeg single-pass multi-variant HLS
     const args = buildFfmpegArgs(
       tmpInput,
       tmpOutputDir,
@@ -197,56 +194,22 @@ export async function handleTranscode(
       segmentDuration
     )
 
-    log("ffmpeg:start", `presets=${presets.length} threads=${threads}`)
-    const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" })
+    const progress = createFFmpegProgressTracker(duration, logger, {
+      stage: "transcode",
+    })
+    logger.info("ffmpeg:start", { presets: presets.length, threads })
+    await runFFmpeg({
+      args,
+      label: "transcode",
+      videoId,
+      progress,
+    })
+    logger.info("ffmpeg:done")
 
-    // Parse progress from FFmpeg stderr
-    const stderrReader = proc.stderr.getReader()
-    let stderrBuffer = ""
-    const readProgress = (async () => {
-      const decoder = new TextDecoder()
-      let lastPct = -1
-      while (true) {
-        const { done, value } = await stderrReader.read()
-        if (done) break
-        stderrBuffer += decoder.decode(value, { stream: true })
-
-        // Parse time=HH:MM:SS.ms from stderr
-        const timeMatch = stderrBuffer.match(/time=(\d+):(\d+):(\d+\.\d+)/g)
-        if (timeMatch) {
-          const last = timeMatch[timeMatch.length - 1]
-          const m = last.match(/time=(\d+):(\d+):(\d+\.\d+)/)
-          if (m) {
-            const secs =
-              parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3])
-            const pct = Math.min(100, Math.round((secs / duration) * 100))
-            if (pct > lastPct) {
-              lastPct = pct
-              log("ffmpeg:progress", `${pct}% ${elapsed()}`)
-            }
-          }
-        }
-
-        // Keep buffer from growing unbounded
-        if (stderrBuffer.length > 4096) {
-          stderrBuffer = stderrBuffer.slice(-2048)
-        }
-      }
-    })()
-
-    await proc.exited
-    await readProgress
-    if (proc.exitCode !== 0) {
-      const tail = stderrBuffer.slice(-500)
-      throw new Error(`FFmpeg transcode failed (exit ${proc.exitCode}): ${tail}`)
-    }
-    log("ffmpeg:done", elapsed())
-
-    // 5. Upload HLS output to MinIO
-    log("upload:start")
+    logger.info("upload:start")
     const hlsPrefix = `hls/${videoId}`
     await uploadDirectory(tmpOutputDir, hlsPrefix)
-    log("upload:done", elapsed())
+    logger.info("upload:done")
 
     const hlsPath = `processed/${hlsPrefix}/master.m3u8`
     const variants = presets.map((p) => ({
@@ -257,8 +220,5 @@ export async function handleTranscode(
     }))
 
     return { hlsPath, variants }
-  } finally {
-    await unlink(tmpInput).catch(() => {})
-    await rm(tmpOutputDir, { recursive: true, force: true }).catch(() => {})
-  }
+  })
 }

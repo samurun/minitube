@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { z } from "zod"
 
 interface AppConfig {
   port: number
@@ -73,104 +74,139 @@ for (const envPath of envCandidates) {
   }
 }
 
-function getEnv(key: string, fallback?: string): string {
-  const value = process.env[key] ?? Bun.env[key] ?? fallback
-  if (value == null || value === "") {
-    throw new Error(`Missing environment variable: ${key}`)
-  }
-  return value
-}
-
-// Resolve hostnames to localhost when not running in Docker, to simplify local development
-function resolveContainerHostname(
-  value: string,
-  containerHost: string
-): string {
-  if (isRunningInDocker) {
-    return value
-  }
-
+// Resolve hostnames to localhost when not running in Docker, to simplify
+// local development where containers expose themselves on 127.0.0.1.
+function resolveContainerHostname(value: string, containerHost: string) {
+  if (isRunningInDocker) return value
   return value.replace(new RegExp(`^${containerHost}(?=[:/]|$)`), "localhost")
 }
 
+const intString = (fallback: number, min = Number.NEGATIVE_INFINITY) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => {
+      const n = v == null || v === "" ? fallback : parseInt(v, 10)
+      return Number.isFinite(n) ? Math.max(min, n) : fallback
+    })
+
+const clampedInt = (fallback: number, min: number, max: number) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => {
+      const n = v == null || v === "" ? fallback : parseInt(v, 10)
+      if (!Number.isFinite(n)) return fallback
+      return Math.min(max, Math.max(min, n))
+    })
+
+const requiredString = (name: string) =>
+  z.string({ required_error: `Missing environment variable: ${name}` }).min(1, {
+    message: `Missing environment variable: ${name}`,
+  })
+
+const envSchema = z.object({
+  PORT: intString(4000, 1),
+  CORS_ORIGINS: z
+    .string()
+    .optional()
+    .default("http://localhost:3000")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean)
+    ),
+
+  POSTGRES_HOST: z.string().optional().default("localhost"),
+  POSTGRES_PORT: intString(5432, 1),
+  POSTGRES_DB: requiredString("POSTGRES_DB"),
+  POSTGRES_USER: requiredString("POSTGRES_USER"),
+  POSTGRES_PASSWORD: requiredString("POSTGRES_PASSWORD"),
+
+  MINIO_ENDPOINT: z.string().optional().default("localhost:9000"),
+  MINIO_PUBLIC_ENDPOINT: z.string().optional(),
+  MINIO_USE_SSL: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
+  MINIO_ROOT_USER: requiredString("MINIO_ROOT_USER"),
+  MINIO_ROOT_PASSWORD: requiredString("MINIO_ROOT_PASSWORD"),
+
+  RABBITMQ_HOST: z.string().optional().default("localhost"),
+  RABBITMQ_PORT: intString(5672, 1),
+  RABBITMQ_USER: z.string().optional().default("admin"),
+  RABBITMQ_PASS: z.string().optional().default("admin"),
+
+  UPLOAD_MAX_SIZE_MB: intString(1024, 1),
+
+  WORKER_MAX_RETRIES: intString(3, 1),
+  FFMPEG_THREADS: intString(1, 1),
+
+  THUMBNAIL_TIMESTAMP_SEC: intString(1, 0),
+  THUMBNAIL_QUALITY: clampedInt(2, 1, 31),
+
+  TRANSCODE_FFMPEG_THREADS: intString(2, 1),
+  HLS_SEGMENT_DURATION: intString(6, 2),
+})
+
+function parseEnv() {
+  const source = { ...Bun.env, ...process.env }
+  const result = envSchema.safeParse(source)
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+      .join("\n")
+    throw new Error(`Invalid environment configuration:\n${issues}`)
+  }
+  return result.data
+}
+
+const env = parseEnv()
+
 export const config: AppConfig = {
-  port: parseInt(getEnv("PORT", "4000"), 10),
-  corsOrigins: getEnv("CORS_ORIGINS", "http://localhost:3000")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean),
+  port: env.PORT,
+  corsOrigins: env.CORS_ORIGINS,
   postgres: {
-    host: resolveContainerHostname(getEnv("POSTGRES_HOST", "localhost"), "db"),
-    port: parseInt(getEnv("POSTGRES_PORT", "5432"), 10),
-    database: getEnv("POSTGRES_DB"),
-    user: getEnv("POSTGRES_USER"),
-    password: getEnv("POSTGRES_PASSWORD"),
+    host: resolveContainerHostname(env.POSTGRES_HOST, "db"),
+    port: env.POSTGRES_PORT,
+    database: env.POSTGRES_DB,
+    user: env.POSTGRES_USER,
+    password: env.POSTGRES_PASSWORD,
   },
   minio: {
-    endpoint: resolveContainerHostname(
-      getEnv("MINIO_ENDPOINT", "localhost:9000"),
-      "minio"
-    ),
+    endpoint: resolveContainerHostname(env.MINIO_ENDPOINT, "minio"),
     publicEndpoint:
-      process.env.MINIO_PUBLIC_ENDPOINT ||
-      resolveContainerHostname(
-        getEnv("MINIO_ENDPOINT", "localhost:9000"),
-        "minio"
-      ),
-    useSSL: getEnv("MINIO_USE_SSL", "false") === "true",
-    rootUser: getEnv("MINIO_ROOT_USER"),
-    rootPassword: getEnv("MINIO_ROOT_PASSWORD"),
+      env.MINIO_PUBLIC_ENDPOINT ??
+      resolveContainerHostname(env.MINIO_ENDPOINT, "minio"),
+    useSSL: env.MINIO_USE_SSL,
+    rootUser: env.MINIO_ROOT_USER,
+    rootPassword: env.MINIO_ROOT_PASSWORD,
     buckets: {
       raw: "raw",
       processed: "processed",
     },
   },
   rabbitmq: {
-    host: resolveContainerHostname(
-      getEnv("RABBITMQ_HOST", "localhost"),
-      "rabbitmq"
-    ),
-    port: parseInt(getEnv("RABBITMQ_PORT", "5672"), 10),
-    user: getEnv("RABBITMQ_USER", "admin"),
-    pass: getEnv("RABBITMQ_PASS", "admin"),
+    host: resolveContainerHostname(env.RABBITMQ_HOST, "rabbitmq"),
+    port: env.RABBITMQ_PORT,
+    user: env.RABBITMQ_USER,
+    pass: env.RABBITMQ_PASS,
   },
   upload: {
-    maxSizeMb: Math.max(
-      1,
-      parseInt(getEnv("UPLOAD_MAX_SIZE_MB", "1024"), 10) || 1024
-    ),
+    maxSizeMb: env.UPLOAD_MAX_SIZE_MB,
   },
   worker: {
-    maxRetries: Math.max(
-      1,
-      parseInt(getEnv("WORKER_MAX_RETRIES", "3"), 10) || 3
-    ),
-    ffmpegThreads: Math.max(
-      1,
-      parseInt(getEnv("FFMPEG_THREADS", "1"), 10) || 1
-    ),
+    maxRetries: env.WORKER_MAX_RETRIES,
+    ffmpegThreads: env.FFMPEG_THREADS,
   },
   thumbnail: {
-    timestampSec: Math.max(
-      0,
-      parseInt(getEnv("THUMBNAIL_TIMESTAMP_SEC", "1"), 10) ?? 1
-    ),
-    quality: Math.max(
-      1,
-      Math.min(
-        31,
-        parseInt(getEnv("THUMBNAIL_QUALITY", "2"), 10) || 2
-      )
-    ),
+    timestampSec: env.THUMBNAIL_TIMESTAMP_SEC,
+    quality: env.THUMBNAIL_QUALITY,
   },
   transcode: {
-    ffmpegThreads: Math.max(
-      1,
-      parseInt(getEnv("TRANSCODE_FFMPEG_THREADS", "2"), 10) || 2
-    ),
-    hlsSegmentDuration: Math.max(
-      2,
-      parseInt(getEnv("HLS_SEGMENT_DURATION", "6"), 10) || 6
-    ),
+    ffmpegThreads: env.TRANSCODE_FFMPEG_THREADS,
+    hlsSegmentDuration: env.HLS_SEGMENT_DURATION,
   },
 }
