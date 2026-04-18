@@ -1,27 +1,35 @@
 import { config } from "@workspace/shared/config"
-import { minioClient } from "@workspace/shared/storage"
-import { splitStoragePath } from "@workspace/shared/storage"
+import type { Logger } from "@workspace/shared/logger"
+import {
+  minioClient,
+  splitStoragePath,
+} from "@workspace/shared/storage"
 import type { ThumbnailJob } from "@workspace/shared/rabbitmq"
-import { probeDuration, runFFmpeg } from "@workspace/worker-core"
-import { unlink } from "node:fs/promises"
+import {
+  probeDuration,
+  runFFmpeg,
+  withTempDir,
+} from "@workspace/worker-core"
+import { join } from "node:path"
 
-export async function handleThumbnail(job: ThumbnailJob) {
+export async function handleThumbnail(
+  job: ThumbnailJob,
+  ctx: { logger: Logger }
+) {
   const { videoId, rawPath } = job
   const { bucket, objectName } = splitStoragePath(rawPath)
   const { ffmpegThreads } = config.worker
   const { timestampSec, quality } = config.thumbnail
 
-  const tmpInput = `/tmp/thumb-in-${videoId}-${Date.now()}.mp4`
-  const tmpOutput = `/tmp/thumb-out-${videoId}-${Date.now()}.jpg`
+  return withTempDir(`thumb-${videoId}`, async (dir) => {
+    const tmpInput = join(dir, "input.mp4")
+    const tmpOutput = join(dir, "output.jpg")
 
-  try {
-    // 1. Download raw video
+    ctx.logger.info("download:start")
     await minioClient.fGetObject(bucket, objectName, tmpInput)
 
-    // 2. Probe duration
     const duration = await probeDuration(tmpInput)
 
-    // 3. Extract single frame
     await runFFmpeg({
       args: [
         "ffmpeg",
@@ -42,15 +50,11 @@ export async function handleThumbnail(job: ThumbnailJob) {
       videoId,
     })
 
-    // 4. Upload to processed bucket
     const outputKey = `thumbnails/${videoId}.jpg`
     const file = Bun.file(tmpOutput)
     const buffer = Buffer.from(await file.arrayBuffer())
     await minioClient.putObject("processed", outputKey, buffer, buffer.length)
 
     return { path: `processed/${outputKey}`, duration }
-  } finally {
-    await unlink(tmpInput).catch(() => {})
-    await unlink(tmpOutput).catch(() => {})
-  }
+  })
 }

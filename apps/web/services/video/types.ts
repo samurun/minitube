@@ -1,27 +1,8 @@
-export interface Video {
-  id: number
-  title: string
-  status: string
-  createdAt: string
-  updatedAt: string
-  videoUrl: string | null
-  duration: number | null
-  thumbnailUrl: string | null
-  seekingPreviewUrl: string | null
-  seekingPreviewInterval: number | null
-  seekingPreviewColumns: number | null
-  seekingPreviewTotalFrames: number | null
-  seekingPreviewTileWidth: number | null
-  seekingPreviewTileHeight: number | null
-}
-
-export interface VideosResponse {
-  message: string
-  preview: {
-    frameIntervalSeconds?: number
-    columnsPerRow: number
-    tileWidth: number
-    tileHeight: number
-  }
-  videos: Video[]
-}
+// Types inferred from the Elysia route tree via Eden Treaty. See
+// apps/web/lib/api/videos.ts for the source of truth.
+export type {
+  Video,
+  VideosResponse,
+  VideoDetailResponse,
+  UploadedVideo,
+} from "@/lib/api/videos"

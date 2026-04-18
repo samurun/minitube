@@ -2,40 +2,14 @@
 
 import React from "react"
 import { UploadCloud, FileVideo, CheckCircle2, X } from "lucide-react"
-import type { VideosResponse } from "@/services/video/types"
+import type { Video, VideosResponse } from "@/services/video/types"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Progress } from "@workspace/ui/components/progress"
 import { cn } from "@workspace/ui/lib/utils"
 import { useUploadVideo } from "@/services/upload/use-upload"
+import { formatBytes, validateVideoFile } from "@/lib/validators/video"
 import { useQueryClient } from "@tanstack/react-query"
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024)
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
-}
-
-const MAX_FILE_SIZE = 1024 * 1024 * 1024 // 1 GB
-const ACCEPTED_TYPES = [
-  "video/mp4",
-  "video/webm",
-  "video/quicktime",
-  "video/x-msvideo",
-  "video/x-matroska",
-]
-
-function validateFile(file: File): string | null {
-  if (!ACCEPTED_TYPES.includes(file.type)) {
-    return "Unsupported file type. Please upload MP4, WebM, or MOV."
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return `File is too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 500 MB.`
-  }
-  return null
-}
 
 export function UploadVideo() {
   const [file, setFile] = React.useState<File>()
@@ -57,7 +31,7 @@ export function UploadVideo() {
     await queryClient.cancelQueries({ queryKey: ["videos"] })
     const previous = queryClient.getQueryData<VideosResponse>(["videos"])
 
-    const placeholder = {
+    const placeholder: Video = {
       id: tempId,
       title: selectedFile.name,
       status: "uploading",
@@ -72,6 +46,8 @@ export function UploadVideo() {
       seekingPreviewTotalFrames: null,
       seekingPreviewTileWidth: null,
       seekingPreviewTileHeight: null,
+      hlsUrl: null,
+      hlsVariants: null,
     }
 
     queryClient.setQueryData<VideosResponse>(["videos"], (old) => {
@@ -139,9 +115,9 @@ export function UploadVideo() {
   }
 
   const handleFileSelect = (selectedFile: File) => {
-    const error = validateFile(selectedFile)
-    if (error) {
-      setValidationError(error)
+    const result = validateVideoFile(selectedFile)
+    if (!result.ok) {
+      setValidationError(result.error)
       setFile(undefined)
       return
     }

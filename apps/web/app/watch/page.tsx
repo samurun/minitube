@@ -1,41 +1,25 @@
 import { LazyPlayer } from "@/components/player/lazy-player"
+import { videosApi } from "@/lib/api/videos"
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}
-
-async function fetchVideo(videoId: string) {
-  const baseUrl =
-    process.env.API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    "http://localhost:4000"
-
-  const res = await fetch(`${baseUrl}/videos/${videoId}`)
-  if (!res.ok) {
-    throw new Error(`Failed to fetch video with id ${videoId}`)
-  }
-  return res.json()
 }
 
 export const generateMetadata = async ({ searchParams }: PageProps) => {
   const { v: videoId } = await searchParams
 
   if (!videoId || Array.isArray(videoId)) {
-    return {
-      title: "Video Not Found",
-    }
+    return { title: "Video Not Found" }
   }
 
   try {
-    const res = await fetchVideo(videoId)
+    const res = await videosApi.get(videoId)
     return {
       title: res.video.title,
-      description: res.video.description || "Watch this video on our platform.",
+      description: "Watch this video on our platform.",
     }
-  } catch (error) {
-    return {
-      title: "Failed to Load Video",
-    }
+  } catch {
+    return { title: "Failed to Load Video" }
   }
 }
 
@@ -54,36 +38,22 @@ export default async function Page({ searchParams }: PageProps) {
   }
 
   try {
-    const res = await fetchVideo(videoId)
-    const apiBaseUrl =
-      process.env.NEXT_PUBLIC_API_URL ??
-      process.env.API_URL ??
-      "http://localhost:4000"
-    const videoUrl: string | null = res.video.videoUrl
-      ? `${apiBaseUrl}${res.video.videoUrl}`
-      : null
-    const hlsUrl: string | null = res.video.hlsUrl
-      ? `${apiBaseUrl}${res.video.hlsUrl}`
-      : null
+    const res = await videosApi.get(videoId)
 
     return (
       <div className="flex flex-col gap-4 px-4 py-6 lg:flex-row">
         <div className="col-span-3 flex w-full flex-col gap-2">
           <LazyPlayer
-            videoUrl={videoUrl ?? ""}
-            hlsUrl={hlsUrl}
+            videoPath={res.video.videoUrl ?? ""}
+            hlsPath={res.video.hlsUrl ?? null}
             duration={res.video.duration ?? 0}
             thumbnailUrl={res.video.thumbnailUrl ?? null}
             seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
             previewConfig={{
-              ...(res.preview ?? {}),
-              frameIntervalSeconds:
-                res.video.seekingPreviewInterval ??
-                res.preview?.frameIntervalSeconds ?? 0,
-              columnsPerRow:
-                res.video.seekingPreviewColumns ?? res.preview?.columnsPerRow ?? 10,
-              tileWidth: res.preview?.tileWidth ?? 160,
-              tileHeight: res.preview?.tileHeight ?? 90,
+              frameIntervalSeconds: res.video.seekingPreviewInterval ?? 0,
+              columnsPerRow: res.video.seekingPreviewColumns ?? 10,
+              tileWidth: 160,
+              tileHeight: 90,
               totalFrames: res.video.seekingPreviewTotalFrames,
               tileWidthActual: res.video.seekingPreviewTileWidth,
               tileHeightActual: res.video.seekingPreviewTileHeight,

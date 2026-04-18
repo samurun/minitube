@@ -1,10 +1,12 @@
 import { Readable } from "node:stream"
 
-import { db } from "../../database"
-import { videos } from "../../database/schema"
+import { logger } from "../../shared/logger"
 import { deleteFromStorage, uploadStreamToRawBucket } from "../../storage"
-import { config } from "../../config"
-import { publishJob, QUEUE } from "@workspace/shared/rabbitmq"
+import { videoRepository } from "../videos/repository"
+import { InvalidVideoFormatError } from "../videos/errors"
+import { uploadJobPublisher } from "./job-publisher"
+
+const log = logger.child({ module: "upload.service" })
 
 // Magic bytes for supported video formats. We only need the first ~16 bytes
 // to validate, so the check never pulls the whole video into memory.
@@ -25,18 +27,28 @@ function isValidVideoHeader(header: Uint8Array): boolean {
   )
 }
 
+function buildVideoMetadata(file: File) {
+  const timestamp = Date.now()
+  const originalName = file.name?.trim() || "video.mp4"
+  const title = originalName.replace(/\.[^/.]+$/, "") || `Video ${timestamp}`
+  const extension = originalName.split(".").pop() || "mp4"
+  const randomSuffix = crypto.randomUUID().slice(0, 8)
+
+  return {
+    title,
+    objectName: `videos/${timestamp}-${randomSuffix}.${extension}`,
+  }
+}
+
 export const uploadService = {
   videoUpload: async (file: File) => {
     const { title, objectName } = buildVideoMetadata(file)
 
-    // Validate from the first bytes only — no full-file buffering.
     const header = new Uint8Array(
       await file.slice(0, MAGIC_HEADER_BYTES).arrayBuffer()
     )
     if (!isValidVideoHeader(header)) {
-      throw new Error(
-        "Invalid video file: content does not match a supported video format"
-      )
+      throw new InvalidVideoFormatError()
     }
 
     // Stream the full body straight into MinIO — API process never holds the
@@ -50,52 +62,40 @@ export const uploadService = {
       file.size
     )
 
-    let video: typeof videos.$inferSelect
+    let video
     try {
-      ;[video] = await db
-        .insert(videos)
-        .values({
-          title,
-          rawPath,
-        })
-        .returning()
+      video = await videoRepository.create({ title, rawPath })
     } catch (err) {
       // DB insert failed — clean up the orphaned file in MinIO
-      await deleteFromStorage(rawPath).catch(() => {})
+      await deleteFromStorage(rawPath).catch((cleanupErr) => {
+        log.error("failed to clean up orphaned upload", {
+          rawPath,
+          err:
+            cleanupErr instanceof Error
+              ? cleanupErr.message
+              : String(cleanupErr),
+        })
+      })
       throw err
     }
 
-    publishJob(QUEUE.THUMBNAIL, {
+    uploadJobPublisher.publishIngestJobs(video.id, video.rawPath)
+
+    log.info("video uploaded", {
       videoId: video.id,
       rawPath: video.rawPath,
-      attempt: 0,
+      sizeBytes: file.size,
     })
 
-    publishJob(QUEUE.SEEKING_PREVIEW, {
-      videoId: video.id,
-      rawPath: video.rawPath,
-      attempt: 0,
-    })
-
-    publishJob(QUEUE.TRANSCODE, {
-      videoId: video.id,
-      rawPath: video.rawPath,
-      attempt: 0,
-    })
-
-    return { message: "Video uploaded successfully", video }
+    return {
+      message: "Video uploaded successfully",
+      video: {
+        id: video.id,
+        title: video.title,
+        status: video.status,
+        createdAt: video.createdAt.toISOString(),
+        updatedAt: video.updatedAt.toISOString(),
+      },
+    }
   },
-}
-
-function buildVideoMetadata(file: File) {
-  const timestamp = Date.now()
-  const originalName = file.name?.trim() || "video.mp4"
-  const title = originalName.replace(/\.[^/.]+$/, "") || `Video ${timestamp}`
-  const extension = originalName.split(".").pop() || "mp4"
-  const randomSuffix = crypto.randomUUID().slice(0, 8)
-
-  return {
-    title,
-    objectName: `videos/${timestamp}-${randomSuffix}.${extension}`,
-  }
 }
