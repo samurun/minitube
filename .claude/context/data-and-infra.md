@@ -65,8 +65,9 @@ bunx drizzle-kit push        # apply schema changes to the DB
 
 Resource caps per service:
 
-- `api`: `cpus: 1.5`, `mem_limit: 1g` — has a Docker healthcheck that curls
-  `/health` every 10s
+- `api`: `cpus: 1.5`, `mem_limit: 1g` — has a Docker healthcheck that probes
+  `/health` every 10s using `bun -e` (the `oven/bun:1-alpine` image doesn't
+  ship curl, and bun is already the runtime)
 - `worker-thumbnail`: `cpus: 0.5`, `mem_limit: 512m` (lightweight, single frame extraction)
 - `worker-preview`: `cpus: 1.5`, `mem_limit: 1g` (CPU-intensive sprite generation)
 - `worker-transcode`: `cpus: 2.0`, `mem_limit: 2g` (CPU-intensive multi-variant HLS encoding)

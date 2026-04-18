@@ -39,11 +39,17 @@ storage → playback) or where a piece of state lives.
    [`uploadStreamToRawBucket`](../../packages/shared/src/storage/index.ts) — the
    API process never buffers the entire video. See
    [apps/api/src/modules/upload/service.ts](../../apps/api/src/modules/upload/service.ts).
-3. The API inserts a row in PostgreSQL with `status: pending`.
-4. The API publishes three jobs to RabbitMQ:
+3. The API inserts a row in PostgreSQL with `status: pending` via
+   [`videoRepository.create`](../../apps/api/src/modules/videos/repository.ts).
+4. The API publishes three ingest jobs to RabbitMQ through
+   [`uploadJobPublisher.publishIngestJobs`](../../apps/api/src/modules/upload/job-publisher.ts)
+   (one call — fans out to all three queues):
    - `video.thumbnail` → extract a frame at 1s
    - `video.seeking-preview` → generate a sprite sheet
    - `video.transcode` → generate multi-variant HLS streams
+5. The API response exposes only a projected view of the new row
+   (`id`, `title`, `status`, `createdAt`, `updatedAt`) — internal fields
+   like `rawPath` and error messages never cross the API boundary.
 
 > The upload route deliberately bypasses Elysia's `t.File()` body validator
 > (it has been unstable for large multipart uploads across Elysia versions) and
@@ -53,10 +59,16 @@ storage → playback) or where a piece of state lives.
 ## Worker flow
 
 Workers are **split into separate processes per job type** for independent
-scaling and resource isolation. Shared logic (generic consumer with
-retry/ack, race-safe video status updates, `probeVideo`/`probeDuration`
-ffprobe wrappers, `runFFmpeg` spawn helper) lives in
-[packages/worker-core](../../packages/worker-core).
+scaling and resource isolation. Each worker's `src/index.ts` is a thin
+recipe that calls [`startWorker`](../../packages/worker-core/src/runtime.ts)
+— the runtime opens DB + RabbitMQ, registers a consumer with retry + graceful
+drain on SIGTERM, and hands the handler a child logger tagged with
+`{ queue, videoId, attempt }`. Handlers use
+[`withTempDir`](../../packages/worker-core/src/tmp.ts) for scratch space and
+[`createFFmpegProgressTracker`](../../packages/worker-core/src/ffmpeg-progress.ts)
+to parse FFmpeg stderr for progress. DB writes go through
+[`updateVideoField`](../../packages/worker-core/src/video-state.ts), which
+race-safely transitions `status` once all three workers report done.
 
 5. Each worker process consumes one job at a time (`ch.prefetch(1)`) and
    runs FFmpeg with `-threads 1` to keep CPU bounded. Since each handler is
@@ -99,8 +111,16 @@ ffprobe wrappers, `runFFmpeg` spawn helper) lives in
 
 ## Playback flow
 
-11. The Web app fetches video metadata from the API, including presigned
-    MinIO URLs and the HLS playlist URL.
+11. The Web app fetches video metadata from the API through the Eden Treaty
+    client in [apps/web/lib/api/](../../apps/web/lib/api) — request and
+    response types are inferred from the API's route tree at
+    [apps/api/src/index.ts](../../apps/api/src/index.ts), so the web never
+    redeclares response shapes. The response carries presigned MinIO URLs
+    for thumbnail + sprite preview, and **relative paths** for video stream
+    and HLS playlist (`/videos/46/stream`, `/videos/46/hls/master.m3u8`).
+    Paths are prefixed with `NEXT_PUBLIC_API_URL` at render time inside
+    `LazyPlayer` (a client component), so SSR markup is host-agnostic and
+    Docker-internal hostnames never leak into HTML.
 12. When HLS is available (`hlsUrl` is set), the frontend uses **hls.js** for
     adaptive bitrate streaming. hls.js fetches the master `.m3u8` from the API
     (`GET /videos/:id/hls/*`), which proxies files from MinIO. The HLS endpoint
