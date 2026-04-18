@@ -1,21 +1,15 @@
-import { Readable } from "node:stream"
-
-import { eq, desc } from "drizzle-orm"
-import { NotFoundError } from "elysia"
-
-import { db } from "../../database"
-import { videos } from "../../database/schema"
+import { logger } from "../../shared/logger"
 import {
-  deleteFromStorage,
-  getObjectRange,
-  getPresignedReadUrl,
-  minioClient,
-  splitStoragePath,
-  statObject,
-} from "../../storage"
-import { config } from "../../config"
+  HlsNotFoundError,
+  InvalidHlsPathError,
+  VideoNotFoundError,
+} from "./errors"
+import { videoRepository, type VideoRecord } from "./repository"
+import { videoStorage } from "./storage"
 
-type VideoRecord = typeof videos.$inferSelect
+const log = logger.child({ module: "videos.service" })
+
+const PRESIGN_TTL_SEC = 600
 
 interface VideoResponse {
   id: number
@@ -37,76 +31,74 @@ interface VideoResponse {
 }
 
 async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
+  const base = {
+    id: video.id,
+    title: video.title,
+    status: video.status,
+    createdAt: video.createdAt,
+    updatedAt: video.updatedAt,
+    duration: video.duration,
+    seekingPreviewInterval: video.seekingPreviewInterval,
+    seekingPreviewColumns: video.seekingPreviewColumns,
+    seekingPreviewTotalFrames: video.seekingPreviewTotalFrames,
+    seekingPreviewTileWidth: video.seekingPreviewTileWidth,
+    seekingPreviewTileHeight: video.seekingPreviewTileHeight,
+  }
+
   try {
     const [thumbnailUrl, seekingPreviewUrl] = await Promise.all([
       video.thumbnailPath
-        ? getPresignedReadUrl(video.thumbnailPath, 600)
+        ? videoStorage.presignRead(video.thumbnailPath, PRESIGN_TTL_SEC)
         : null,
       video.seekingPreviewPath
-        ? getPresignedReadUrl(video.seekingPreviewPath, 600)
+        ? videoStorage.presignRead(video.seekingPreviewPath, PRESIGN_TTL_SEC)
         : null,
     ])
-    const videoUrl = `/videos/${video.id}/stream`
-    const hlsUrl = video.hlsPath
-      ? `/videos/${video.id}/hls/master.m3u8`
-      : null
-    const hlsVariants = video.hlsVariants
-      ? (JSON.parse(video.hlsVariants) as object[])
-      : null
 
     return {
-      id: video.id,
-      title: video.title,
-      status: video.status,
-      createdAt: video.createdAt,
-      updatedAt: video.updatedAt,
-      duration: video.duration,
-      videoUrl,
+      ...base,
+      videoUrl: `/videos/${video.id}/stream`,
       thumbnailUrl,
       seekingPreviewUrl,
-      seekingPreviewInterval: video.seekingPreviewInterval,
-      seekingPreviewColumns: video.seekingPreviewColumns,
-      seekingPreviewTotalFrames: video.seekingPreviewTotalFrames,
-      seekingPreviewTileWidth: video.seekingPreviewTileWidth,
-      seekingPreviewTileHeight: video.seekingPreviewTileHeight,
-      hlsUrl,
-      hlsVariants,
+      hlsUrl: video.hlsPath ? `/videos/${video.id}/hls/master.m3u8` : null,
+      hlsVariants: video.hlsVariants
+        ? (JSON.parse(video.hlsVariants) as object[])
+        : null,
     }
   } catch (err) {
-    console.error(
-      `Failed to generate presigned URLs for video ${video.id}:`,
-      err
-    )
+    log.error("failed to attach video URLs", {
+      videoId: video.id,
+      err: err instanceof Error ? err.message : String(err),
+    })
     return {
-      id: video.id,
-      title: video.title,
-      status: video.status,
-      createdAt: video.createdAt,
-      updatedAt: video.updatedAt,
+      ...base,
       videoUrl: null,
-      duration: video.duration,
       thumbnailUrl: null,
       seekingPreviewUrl: null,
-      seekingPreviewInterval: video.seekingPreviewInterval,
-      seekingPreviewColumns: video.seekingPreviewColumns,
-      seekingPreviewTotalFrames: video.seekingPreviewTotalFrames,
-      seekingPreviewTileWidth: video.seekingPreviewTileWidth,
-      seekingPreviewTileHeight: video.seekingPreviewTileHeight,
       hlsUrl: null,
       hlsVariants: null,
     }
   }
 }
 
+function parseRange(
+  rangeHeader: string,
+  size: number
+): { start: number; end: number } | null {
+  const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader)
+  if (!match || !match[1]) return null
+
+  const start = parseInt(match[1], 10)
+  const requestedEnd = match[2] ? parseInt(match[2], 10) : size - 1
+  const end = Math.min(requestedEnd, size - 1)
+
+  if (Number.isNaN(start) || start >= size || end < start) return null
+  return { start, end }
+}
+
 export const videoService = {
   getVideos: async (page = 1, pageSize = 20) => {
-    const offset = (page - 1) * pageSize
-    const records = await db
-      .select()
-      .from(videos)
-      .orderBy(desc(videos.createdAt))
-      .limit(pageSize)
-      .offset(offset)
+    const records = await videoRepository.list(page, pageSize)
     return {
       message: "Videos fetched successfully",
       videos: await Promise.all(records.map(attachVideoUrls)),
@@ -114,16 +106,8 @@ export const videoService = {
   },
 
   getVideoById: async (id: number) => {
-    const [video] = await db
-      .select()
-      .from(videos)
-      .where(eq(videos.id, id))
-      .limit(1)
-
-    if (!video) {
-      throw new NotFoundError("Video not found")
-    }
-
+    const video = await videoRepository.findById(id)
+    if (!video) throw new VideoNotFoundError(id)
     return {
       message: "Video fetched successfully",
       video: await attachVideoUrls(video),
@@ -138,26 +122,19 @@ export const videoService = {
     status: 200 | 206 | 416
     headers: Record<string, string>
   }> => {
-    const [video] = await db
-      .select()
-      .from(videos)
-      .where(eq(videos.id, id))
-      .limit(1)
+    const video = await videoRepository.findById(id)
+    if (!video) throw new VideoNotFoundError(id)
 
-    if (!video) {
-      throw new NotFoundError("Video not found")
-    }
-
-    const stat = await statObject(video.rawPath)
+    const stat = await videoStorage.statRaw(video.rawPath)
     const size = stat.size
     const contentType =
       (stat.metaData && (stat.metaData["content-type"] as string)) ||
       "video/mp4"
 
     if (!rangeHeader) {
-      const stream = await getObjectRange(video.rawPath, 0, size)
+      const body = await videoStorage.readRawRange(video.rawPath, 0, size)
       return {
-        body: Readable.toWeb(stream) as unknown as ReadableStream,
+        body,
         status: 200,
         headers: {
           "content-type": contentType,
@@ -168,8 +145,8 @@ export const videoService = {
       }
     }
 
-    const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader)
-    if (!match || !match[1]) {
+    const range = parseRange(rangeHeader, size)
+    if (!range) {
       return {
         body: new ReadableStream({ start: (c) => c.close() }),
         status: 416,
@@ -180,31 +157,20 @@ export const videoService = {
       }
     }
 
-    const start = parseInt(match[1], 10)
-    const requestedEnd = match[2] ? parseInt(match[2], 10) : size - 1
-    const end = Math.min(requestedEnd, size - 1)
-
-    if (Number.isNaN(start) || start >= size || end < start) {
-      return {
-        body: new ReadableStream({ start: (c) => c.close() }),
-        status: 416,
-        headers: {
-          "content-range": `bytes */${size}`,
-          "content-type": contentType,
-        },
-      }
-    }
-
-    const length = end - start + 1
-    const stream = await getObjectRange(video.rawPath, start, length)
+    const length = range.end - range.start + 1
+    const body = await videoStorage.readRawRange(
+      video.rawPath,
+      range.start,
+      length
+    )
 
     return {
-      body: Readable.toWeb(stream) as unknown as ReadableStream,
+      body,
       status: 206,
       headers: {
         "content-type": contentType,
         "content-length": String(length),
-        "content-range": `bytes ${start}-${end}/${size}`,
+        "content-range": `bytes ${range.start}-${range.end}/${size}`,
         "accept-ranges": "bytes",
         "cache-control": "no-store",
       },
@@ -214,30 +180,21 @@ export const videoService = {
   streamHls: async (
     id: number,
     hlsSubPath: string
-  ): Promise<{
-    body: ReadableStream
-    headers: Record<string, string>
-  }> => {
-    // Prevent path traversal — only allow safe HLS file paths
+  ): Promise<{ body: ReadableStream; headers: Record<string, string> }> => {
     if (
       hlsSubPath.includes("..") ||
       !/^[\w\-\/]+\.(m3u8|ts)$/.test(hlsSubPath)
     ) {
-      throw new NotFoundError("Invalid HLS path")
+      throw new InvalidHlsPathError()
     }
 
-    const [video] = await db
-      .select()
-      .from(videos)
-      .where(eq(videos.id, id))
-      .limit(1)
-
-    if (!video || !video.hlsPath) {
-      throw new NotFoundError("HLS content not found")
-    }
+    const video = await videoRepository.findById(id)
+    if (!video || !video.hlsPath) throw new HlsNotFoundError()
 
     const basePath = video.hlsPath.replace(/master\.m3u8$/, "")
-    const objectPath = basePath + hlsSubPath
+    const { body, size } = await videoStorage.readHlsObject(
+      basePath + hlsSubPath
+    )
 
     const contentType = hlsSubPath.endsWith(".m3u8")
       ? "application/vnd.apple.mpegurl"
@@ -245,71 +202,30 @@ export const videoService = {
         ? "video/MP2T"
         : "application/octet-stream"
 
-    const { bucket, objectName } = splitStoragePath(objectPath)
-    const stat = await minioClient.statObject(bucket, objectName)
-    const stream = await minioClient.getObject(bucket, objectName)
-
     return {
-      body: Readable.toWeb(stream) as unknown as ReadableStream,
+      body,
       headers: {
         "content-type": contentType,
-        "content-length": String(stat.size),
+        "content-length": String(size),
         "cache-control": "public, max-age=31536000",
       },
     }
   },
 
   deleteVideo: async (id: number) => {
-    // Delete from DB first to avoid dangling records pointing to deleted files
-    const [deletedVideo] = await db
-      .delete(videos)
-      .where(eq(videos.id, id))
-      .returning()
+    const deleted = await videoRepository.deleteById(id)
+    if (!deleted) throw new VideoNotFoundError(id)
 
-    if (!deletedVideo) {
-      throw new NotFoundError("Video not found")
-    }
+    const paths = [
+      deleted.rawPath,
+      deleted.thumbnailPath,
+      deleted.seekingPreviewPath,
+    ].filter((p): p is string => Boolean(p))
 
-    // Clean up storage after DB delete succeeds — log failures instead of
-    // throwing so a storage hiccup doesn't undo the successful DB delete.
-    const storagePaths = [
-      deletedVideo.rawPath,
-      deletedVideo.thumbnailPath,
-      deletedVideo.seekingPreviewPath,
-    ].filter((path): path is string => Boolean(path))
+    await videoStorage.deleteMany(paths)
 
-    await Promise.allSettled(
-      storagePaths.map((path) => deleteFromStorage(path))
-    ).then((results) => {
-      results.forEach((r, i) => {
-        if (r.status === "rejected") {
-          console.error(
-            `Failed to delete storage object "${storagePaths[i]}":`,
-            r.reason
-          )
-        }
-      })
-    })
-
-    // Clean up HLS directory (multiple objects under a prefix)
-    if (deletedVideo.hlsPath) {
-      try {
-        const hlsBase = deletedVideo.hlsPath.replace(/master\.m3u8$/, "")
-        const { bucket, objectName: prefix } = splitStoragePath(hlsBase)
-        const objectsList = minioClient.listObjects(bucket, prefix, true)
-        const objectsToDelete: string[] = []
-        for await (const obj of objectsList) {
-          objectsToDelete.push(obj.name)
-        }
-        await Promise.allSettled(
-          objectsToDelete.map((name) => minioClient.removeObject(bucket, name))
-        )
-      } catch (err) {
-        console.error(
-          `Failed to delete HLS objects for video ${id}:`,
-          err
-        )
-      }
+    if (deleted.hlsPath) {
+      await videoStorage.deleteHlsTree(deleted.hlsPath)
     }
 
     return { message: "Video deleted successfully" }

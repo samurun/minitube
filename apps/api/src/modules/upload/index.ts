@@ -1,4 +1,5 @@
 import Elysia from "elysia"
+import { MissingUploadFileError } from "../videos/errors"
 import { uploadService } from "./service"
 
 // We deliberately skip Elysia's `t.File()` schema validation here. For large
@@ -13,7 +14,7 @@ export const uploadRoute = new Elysia({
     const form = await request.formData()
     const file = form.get("file")
     if (!(file instanceof File)) {
-      throw new Error("Missing 'file' field in multipart body")
+      throw new MissingUploadFileError()
     }
     return uploadService.videoUpload(file)
   },
