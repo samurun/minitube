@@ -78,10 +78,18 @@ The ones you must not forget:
 - **Shared logic lives in [packages/shared](./packages/shared)**, imported via
   `@workspace/shared/{config,database,storage,rabbitmq,logger}`.
 - **Worker shared logic lives in [packages/worker-core](./packages/worker-core)** —
-  new worker apps should use `registerConsumer` + `updateVideoField` from
-  `@workspace/worker-core`. Shared utilities `probeVideo`, `probeDuration`,
-  and `runFFmpeg` are also exported from worker-core.
-- **Graceful shutdown** — workers call `consumer.drain()` on SIGTERM to finish
-  in-flight jobs before exiting.
+  new worker apps call `startWorker` from `@workspace/worker-core`, which
+  bootstraps DB + RabbitMQ, wires a consumer with retry + graceful drain, and
+  hands the handler a child logger. Handlers use `withTempDir` for scratch
+  space and `createFFmpegProgressTracker` + `runFFmpeg` for encoding; ffprobe
+  lives behind `probeVideo` / `probeDuration`. DB writes go through
+  `updateVideoField` (race-safe status transitions).
 - **Retry backoff** — failed jobs use exponential backoff (1s, 2s, 4s…) before
   requeue.
+- **Web ↔ API types via Eden Treaty** — `apps/api/src/index.ts` exports
+  `type App = typeof app`; the web client in [apps/web/lib/api/](./apps/web/lib/api)
+  derives request/response types from it, so there is no hand-written schema
+  layer. Don't re-declare API response shapes in web code.
+- **Logging is structured** — never use `console.*` in app code. Create a
+  child logger from `@workspace/shared/logger` and pass context via
+  `logger.child({ videoId })`.
