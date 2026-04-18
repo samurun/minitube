@@ -50,8 +50,14 @@ services:
     # Cap CPU so request handling (uploads especially) can't starve the host.
     cpus: 1.5
     mem_limit: 1g
+    # oven/bun:1-alpine doesn't ship curl, so use bun itself for the probe —
+    # zero extra image size, always present (it's the runtime).
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      test:
+        - CMD
+        - bun
+        - -e
+        - fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
       interval: 10s
       timeout: 5s
       retries: 3
