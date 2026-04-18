@@ -39,15 +39,19 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
 
-  # Unit tests — enable once `pnpm test` is wired up across workspaces.
-  # test:
-  #   name: Unit tests
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 10
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup
-  #     - run: pnpm test
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Bun is required because `apps/api` runs its unit tests with `bun test`.
+      # The composite `setup` action handles pnpm + Node only.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: ./.github/actions/setup
+      - run: pnpm test
 
   # End-to-end tests — enable once an e2e harness (e.g. Playwright) is added.
   # e2e:
