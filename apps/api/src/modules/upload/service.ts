@@ -87,6 +87,15 @@ export const uploadService = {
       sizeBytes: file.size,
     })
 
-    return { message: "Video uploaded successfully", video }
+    return {
+      message: "Video uploaded successfully",
+      video: {
+        id: video.id,
+        title: video.title,
+        status: video.status,
+        createdAt: video.createdAt.toISOString(),
+        updatedAt: video.updatedAt.toISOString(),
+      },
+    }
   },
 }

@@ -11,32 +11,23 @@ const log = logger.child({ module: "videos.service" })
 
 const PRESIGN_TTL_SEC = 600
 
-interface VideoResponse {
-  id: number
-  title: string
-  status: string
-  createdAt: Date
-  updatedAt: Date
-  videoUrl: string | null
-  duration: number | null
-  thumbnailUrl: string | null
-  seekingPreviewUrl: string | null
-  seekingPreviewInterval: number | null
-  seekingPreviewColumns: number | null
-  seekingPreviewTotalFrames: number | null
-  seekingPreviewTileWidth: number | null
-  seekingPreviewTileHeight: number | null
-  hlsUrl: string | null
-  hlsVariants: object[] | null
+// Inline shape (not a named export) so Eden Treaty's inferred response type
+// stays structural — named types local to this file can't be re-exported
+// from `api/app` for web consumers.
+type HlsVariantShape = {
+  name: string
+  width: number
+  height: number
+  bitrate: number
 }
 
-async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
+async function attachVideoUrls(video: VideoRecord) {
   const base = {
     id: video.id,
     title: video.title,
     status: video.status,
-    createdAt: video.createdAt,
-    updatedAt: video.updatedAt,
+    createdAt: video.createdAt.toISOString(),
+    updatedAt: video.updatedAt.toISOString(),
     duration: video.duration,
     seekingPreviewInterval: video.seekingPreviewInterval,
     seekingPreviewColumns: video.seekingPreviewColumns,
@@ -62,8 +53,8 @@ async function attachVideoUrls(video: VideoRecord): Promise<VideoResponse> {
       seekingPreviewUrl,
       hlsUrl: video.hlsPath ? `/videos/${video.id}/hls/master.m3u8` : null,
       hlsVariants: video.hlsVariants
-        ? (JSON.parse(video.hlsVariants) as object[])
-        : null,
+        ? (JSON.parse(video.hlsVariants) as HlsVariantShape[])
+        : (null as HlsVariantShape[] | null),
     }
   } catch (err) {
     log.error("failed to attach video URLs", {

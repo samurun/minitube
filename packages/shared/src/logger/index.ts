@@ -23,10 +23,11 @@ interface Logger {
   child: (defaultCtx: Record<string, unknown>) => Logger
 }
 
+// Bun populates `process.env`, so reading from it keeps this file free of
+// Bun-specific globals and compilable from non-Bun runtimes (e.g. Next.js'
+// tsc walking into this file via a type import).
 const minLevel: LogLevel =
-  ((globalThis.process?.env?.LOG_LEVEL ?? Bun.env.LOG_LEVEL) as
-    | LogLevel
-    | undefined) ?? "info"
+  (globalThis.process?.env?.LOG_LEVEL as LogLevel | undefined) ?? "info"
 
 function emit(entry: LogEntry) {
   const out = JSON.stringify(entry)

@@ -18,34 +18,51 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init?: RequestInit
-): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, init)
-  if (!res.ok) {
-    throw new ApiError(`Request failed: ${path}`, res.status)
+interface EdenResult<T> {
+  data: T | null
+  error: { status: unknown; value: unknown } | null
+}
+
+function extractErrorMessage(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null
+  if (!("error" in value)) return null
+  const err = (value as { error: unknown }).error
+  return typeof err === "string" ? err : null
+}
+
+/**
+ * Unwrap a treaty response: throws ApiError on non-2xx, returns data otherwise.
+ * React Query relies on throws for its error channel, so hooks consume this
+ * instead of the `{ data, error }` tuple directly.
+ */
+export function unwrap<T>(result: EdenResult<T>): T {
+  if (result.error) {
+    const status =
+      typeof result.error.status === "number" ? result.error.status : 500
+    const message =
+      extractErrorMessage(result.error.value) ?? `Request failed (${status})`
+    throw new ApiError(message, status)
   }
-  return res.json() as Promise<T>
+  return result.data as T
 }
 
-interface UploadOptions {
-  onProgress?: (percent: number) => void
-  signal?: AbortSignal
-}
-
+/**
+ * XHR-backed upload that reports progress. Eden Treaty uses fetch under the
+ * hood, which doesn't expose upload progress events, so uploads still go
+ * through XHR. The response type is imported from Eden so it stays in sync
+ * with the API.
+ */
 export function apiUpload<T>(
   path: string,
   formData: FormData,
-  { onProgress, signal }: UploadOptions = {}
+  { onProgress, signal }: { onProgress?: (p: number) => void; signal?: AbortSignal } = {}
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
-      const percent = Math.round((event.loaded / event.total) * 100)
-      onProgress?.(percent)
+      onProgress?.(Math.round((event.loaded / event.total) * 100))
     }
 
     xhr.onload = () => {
@@ -61,8 +78,7 @@ export function apiUpload<T>(
     }
 
     xhr.onerror = () => reject(new Error("Network error during upload"))
-    xhr.onabort = () =>
-      reject(new DOMException("Upload aborted", "AbortError"))
+    xhr.onabort = () => reject(new DOMException("Upload aborted", "AbortError"))
 
     signal?.addEventListener("abort", () => xhr.abort())
 
@@ -70,4 +86,3 @@ export function apiUpload<T>(
     xhr.send(formData)
   })
 }
-

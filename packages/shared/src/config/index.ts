@@ -68,7 +68,7 @@ for (const envPath of envCandidates) {
     const key = trimmed.slice(0, eqIndex)
     const value = trimmed.slice(eqIndex + 1)
 
-    if (process.env[key] == null && Bun.env[key] == null) {
+    if (process.env[key] == null) {
       process.env[key] = value
     }
   }
@@ -152,8 +152,8 @@ const envSchema = z.object({
 })
 
 function parseEnv() {
-  const source = { ...Bun.env, ...process.env }
-  const result = envSchema.safeParse(source)
+  // Bun populates process.env identically to Bun.env, so this works in both.
+  const result = envSchema.safeParse(process.env)
   if (!result.success) {
     const issues = result.error.issues
       .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)

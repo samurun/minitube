@@ -2,7 +2,7 @@
 
 import React from "react"
 import { UploadCloud, FileVideo, CheckCircle2, X } from "lucide-react"
-import type { VideosResponse } from "@/services/video/types"
+import type { Video, VideosResponse } from "@/services/video/types"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Progress } from "@workspace/ui/components/progress"
@@ -31,7 +31,7 @@ export function UploadVideo() {
     await queryClient.cancelQueries({ queryKey: ["videos"] })
     const previous = queryClient.getQueryData<VideosResponse>(["videos"])
 
-    const placeholder = {
+    const placeholder: Video = {
       id: tempId,
       title: selectedFile.name,
       status: "uploading",
@@ -46,6 +46,8 @@ export function UploadVideo() {
       seekingPreviewTotalFrames: null,
       seekingPreviewTileWidth: null,
       seekingPreviewTileHeight: null,
+      hlsUrl: null,
+      hlsVariants: null,
     }
 
     queryClient.setQueryData<VideosResponse>(["videos"], (old) => {
