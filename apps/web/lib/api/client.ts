@@ -1,6 +1,11 @@
+// Base URL for server-side fetches (server components, route handlers).
+// Prefers `API_URL` so docker SSR can reach the API via the internal
+// hostname `http://api:4000`; the browser never sees `API_URL` because
+// Next only inlines `NEXT_PUBLIC_*` — it resolves to `undefined` there and
+// falls through to the public URL.
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:4000"
 
 export class ApiError extends Error {
@@ -66,7 +71,3 @@ export function apiUpload<T>(
   })
 }
 
-/** Prefix a path returned by the API (e.g. "/videos/1/stream") with API_BASE_URL. */
-export function apiUrl(path: string): string {
-  return `${API_BASE_URL}${path}`
-}

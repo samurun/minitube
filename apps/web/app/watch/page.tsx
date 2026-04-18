@@ -1,5 +1,4 @@
 import { LazyPlayer } from "@/components/player/lazy-player"
-import { apiUrl } from "@/lib/api/client"
 import { videosApi } from "@/lib/api/videos"
 
 interface PageProps {
@@ -41,15 +40,13 @@ export default async function Page({ searchParams }: PageProps) {
 
   try {
     const res = await videosApi.get(videoId)
-    const videoUrl = res.video.videoUrl ? apiUrl(res.video.videoUrl) : null
-    const hlsUrl = res.video.hlsUrl ? apiUrl(res.video.hlsUrl) : null
 
     return (
       <div className="flex flex-col gap-4 px-4 py-6 lg:flex-row">
         <div className="col-span-3 flex w-full flex-col gap-2">
           <LazyPlayer
-            videoUrl={videoUrl ?? ""}
-            hlsUrl={hlsUrl}
+            videoPath={res.video.videoUrl ?? ""}
+            hlsPath={res.video.hlsUrl ?? null}
             duration={res.video.duration ?? 0}
             thumbnailUrl={res.video.thumbnailUrl ?? null}
             seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
