@@ -12,8 +12,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@elysiajs/eden": "^1.4",
     "@tanstack/react-query": "^5.96.2",
     "@workspace/ui": "workspace:*",
+    "api": "workspace:*",
     "hls.js": "^1.6.15",
     "lucide-react": "^1.7.0",
     "next": "16.1.6",

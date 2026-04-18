@@ -16,8 +16,7 @@ export const generateMetadata = async ({ searchParams }: PageProps) => {
     const res = await videosApi.get(videoId)
     return {
       title: res.video.title,
-      description:
-        res.video.description || "Watch this video on our platform.",
+      description: "Watch this video on our platform.",
     }
   } catch {
     return { title: "Failed to Load Video" }
@@ -51,17 +50,10 @@ export default async function Page({ searchParams }: PageProps) {
             thumbnailUrl={res.video.thumbnailUrl ?? null}
             seekingPreviewUrl={res.video.seekingPreviewUrl ?? null}
             previewConfig={{
-              ...(res.preview ?? {}),
-              frameIntervalSeconds:
-                res.video.seekingPreviewInterval ??
-                res.preview?.frameIntervalSeconds ??
-                0,
-              columnsPerRow:
-                res.video.seekingPreviewColumns ??
-                res.preview?.columnsPerRow ??
-                10,
-              tileWidth: res.preview?.tileWidth ?? 160,
-              tileHeight: res.preview?.tileHeight ?? 90,
+              frameIntervalSeconds: res.video.seekingPreviewInterval ?? 0,
+              columnsPerRow: res.video.seekingPreviewColumns ?? 10,
+              tileWidth: 160,
+              tileHeight: 90,
               totalFrames: res.video.seekingPreviewTotalFrames,
               tileWidthActual: res.video.seekingPreviewTileWidth,
               tileHeightActual: res.video.seekingPreviewTileHeight,

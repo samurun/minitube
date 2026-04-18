@@ -20,6 +20,10 @@ const app = new Elysia()
   .use(hlsRoute)
   .use(videoRoute)
 
+// Exported for Eden Treaty so the web client can infer request/response
+// types directly from these route handlers.
+export type App = typeof app
+
 async function start() {
   try {
     logger.info("initializing services")

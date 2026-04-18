@@ -27,6 +27,7 @@ export const videoRepository = {
 
   create: async (data: NewVideo): Promise<VideoRecord> => {
     const [row] = await db.insert(videos).values(data).returning()
+    if (!row) throw new Error("Insert returned no row")
     return row
   },
 
