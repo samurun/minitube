@@ -24,6 +24,11 @@
       "dependsOn": ["^test"],
       "outputs": []
     },
+    "e2e": {
+      "cache": false,
+      "env": ["RUN_UPLOAD_E2E", "E2E_BASE_URL", "E2E_API_URL", "CI"],
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true
