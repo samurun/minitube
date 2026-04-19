@@ -53,12 +53,99 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm test
 
-  # End-to-end tests — enable once an e2e harness (e.g. Playwright) is added.
-  # e2e:
-  #   name: E2E
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 20
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup
-  #     - run: pnpm e2e
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: ./.github/actions/setup
+
+      - name: Write .env
+        run: |
+          cat > .env <<'EOF'
+          PORT=4000
+          POSTGRES_USER=myuser
+          POSTGRES_PASSWORD=mypassword
+          POSTGRES_DB=mydatabase
+          POSTGRES_HOST=db
+          POSTGRES_PORT=5432
+          MINIO_ROOT_USER=minioadmin
+          MINIO_ROOT_PASSWORD=minioadmin
+          MINIO_API_PORT=9000
+          MINIO_CONSOLE_PORT=9001
+          MINIO_DATA_DIR=/data
+          MINIO_ENDPOINT=minio:9000
+          MINIO_PUBLIC_ENDPOINT=localhost:9000
+          MINIO_USE_SSL=false
+          RABBITMQ_USER=admin
+          RABBITMQ_PASS=admin
+          RABBITMQ_PORT=5672
+          RABBITMQ_MANAGEMENT_PORT=15672
+          RABBITMQ_HOST=rabbitmq
+          API_URL=http://localhost:4000
+          NEXT_PUBLIC_API_URL=http://localhost:4000
+          GRAFANA_ADMIN_USER=admin
+          GRAFANA_ADMIN_PASSWORD=admin
+          EOF
+
+      - name: Start infra (db, minio, rabbitmq)
+        run: pnpm docker:infra
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..60}; do
+            docker exec db pg_isready -U myuser -d mydatabase >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          echo "Postgres never became ready" && exit 1
+
+      - name: Init DB schema
+        run: pnpm db:push
+
+      - name: Install Playwright browsers
+        run: pnpm --filter e2e e2e:install
+
+      - name: Start app stack
+        run: |
+          nohup pnpm dev:all > /tmp/app.log 2>&1 &
+          echo $! > /tmp/app.pid
+        env:
+          TURBO_UI: "false"
+          CI: "true"
+
+      - name: Wait for web :3000
+        run: |
+          for i in {1..150}; do
+            curl -sSf http://localhost:3000 >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "web failed to start; log tail:"
+          tail -300 /tmp/app.log || true
+          exit 1
+
+      - name: Run Playwright
+        run: pnpm e2e
+        env:
+          RUN_UPLOAD_E2E: "1"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload stack log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-log
+          path: /tmp/app.log
+          if-no-files-found: ignore
+          retention-days: 7

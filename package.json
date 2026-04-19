@@ -14,6 +14,8 @@
     "format": "turbo format",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "e2e": "turbo e2e --filter=e2e",
+    "e2e:install": "pnpm --filter e2e e2e:install",
     "db:push": "cd apps/api && bunx drizzle-kit push",
     "db:generate": "cd apps/api && bunx drizzle-kit generate",
     "docker:up": "docker compose up -d",
